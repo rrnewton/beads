@@ -22,6 +22,7 @@ import (
 	"github.com/steveyegge/beads"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/memory"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"golang.org/x/mod/semver"
@@ -93,6 +94,28 @@ var rootCmd = &cobra.Command{
 
 		// Set auto-import based on flag (invert no-auto-import)
 		autoImportEnabled = !noAutoImport
+
+		// Handle --no-db mode: load from JSONL, use in-memory storage
+		if noDb {
+			if err := initializeNoDbMode(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error initializing --no-db mode: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Set actor for audit trail
+			if actor == "" {
+				if bdActor := os.Getenv("BD_ACTOR"); bdActor != "" {
+					actor = bdActor
+				} else if user := os.Getenv("USER"); user != "" {
+					actor = user
+				} else {
+					actor = "unknown"
+				}
+			}
+
+			// Skip daemon and SQLite initialization - we're in memory mode
+			return
+		}
 
 		// Initialize database path
 		if dbPath == "" {
@@ -330,6 +353,26 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		// Handle --no-db mode: write memory storage back to JSONL
+		if noDb {
+			if store != nil {
+				cwd, err := os.Getwd()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: failed to get current directory: %v\n", err)
+					os.Exit(1)
+				}
+
+				beadsDir := filepath.Join(cwd, ".beads")
+				if memStore, ok := store.(*memory.MemoryStorage); ok {
+					if err := writeIssuesToJSONL(memStore, beadsDir); err != nil {
+						fmt.Fprintf(os.Stderr, "Error: failed to write JSONL: %v\n", err)
+						os.Exit(1)
+					}
+				}
+			}
+			return
+		}
+
 		// Close daemon client if we're using it
 		if daemonClient != nil {
 			_ = daemonClient.Close()
@@ -1341,6 +1384,7 @@ func flushToJSONL() {
 var (
 	noAutoFlush  bool
 	noAutoImport bool
+	noDb         bool // Use --no-db mode: load from JSONL, write back after each command
 )
 
 func init() {
@@ -1350,6 +1394,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noDaemon, "no-daemon", false, "Force direct storage mode, bypass daemon if running")
 	rootCmd.PersistentFlags().BoolVar(&noAutoFlush, "no-auto-flush", false, "Disable automatic JSONL sync after CRUD operations")
 	rootCmd.PersistentFlags().BoolVar(&noAutoImport, "no-auto-import", false, "Disable automatic JSONL import when newer than DB")
+	rootCmd.PersistentFlags().BoolVar(&noDb, "no-db", false, "Use no-db mode: load from JSONL, no SQLite, write back after each command")
 }
 
 // createIssuesFromMarkdown parses a markdown file and creates multiple issues
