@@ -558,6 +558,7 @@ func TestAutoFlushErrorHandling(t *testing.T) {
 	// Note: We create issues.jsonl as a directory to force os.Create() to fail,
 	// which works even when running as root (unlike chmod-based approaches)
 
+
 	// Create temp directory for test database
 	tmpDir, err := os.MkdirTemp("", "bd-test-error-*")
 	if err != nil {
