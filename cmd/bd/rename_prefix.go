@@ -201,15 +201,6 @@ func detectPrefixes(issues []*types.Issue) map[string]int {
 	return prefixes
 }
 
-// extractIssuePrefix extracts the prefix from an issue ID like "bd-123" -> "bd"
-func extractIssuePrefix(issueID string) string {
-	parts := strings.SplitN(issueID, "-", 2)
-	if len(parts) < 2 {
-		return ""
-	}
-	return parts[0]
-}
-
 // extractIssueNumber extracts the number from an issue ID like "bd-123" -> 123
 func extractIssueNumber(issueID string) int {
 	parts := strings.SplitN(issueID, "-", 2)
