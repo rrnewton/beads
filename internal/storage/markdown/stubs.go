@@ -110,9 +110,20 @@ func (m *MarkdownStorage) GetStatistics(ctx context.Context) (*types.Statistics,
 }
 
 // GetDirtyIssues returns issues that need syncing
+// For markdown backend, we don't track dirty flags separately since each update
+// writes directly to disk. To support auto-flush to JSONL, we return all issue IDs.
 func (m *MarkdownStorage) GetDirtyIssues(ctx context.Context) ([]string, error) {
-	// Not applicable for markdown backend - all issues are always synced
-	return nil, nil
+	issues, err := m.ListIssues(ctx, types.IssueFilter{})
+	if err != nil {
+		return nil, err
+	}
+
+	issueIDs := make([]string, len(issues))
+	for i, issue := range issues {
+		issueIDs[i] = issue.ID
+	}
+
+	return issueIDs, nil
 }
 
 // ClearDirtyIssues clears all dirty flags
