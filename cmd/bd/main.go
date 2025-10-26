@@ -237,6 +237,32 @@ var rootCmd = &cobra.Command{
 		// Skip daemon mode for markdown backend (daemon doesn't support it yet)
 		backend := detectBackend(dbPath)
 		if backend == "markdown" {
+			// Validate that auto-start-daemon is not explicitly enabled with markdown backend
+			// Check if auto-start-daemon is set via env var (BEADS_AUTO_START_DAEMON)
+			if autoStartEnv := os.Getenv("BEADS_AUTO_START_DAEMON"); autoStartEnv == "true" || autoStartEnv == "1" {
+				fmt.Fprintf(os.Stderr, "Error: BEADS_AUTO_START_DAEMON=true is not supported with backend=markdown\n")
+				fmt.Fprintf(os.Stderr, "The markdown backend does not support daemon mode.\n")
+				fmt.Fprintf(os.Stderr, "Unset BEADS_AUTO_START_DAEMON or set it to false.\n")
+				os.Exit(1)
+			}
+
+			// Check if auto-start-daemon is explicitly in config file
+			// Read config file directly to check (viper.IsSet includes defaults)
+			configFile := config.FileUsed()
+			if configFile != "" {
+				if data, err := os.ReadFile(configFile); err == nil {
+					var cfg map[string]interface{}
+					if err := yaml.Unmarshal(data, &cfg); err == nil {
+						if autoStart, ok := cfg["auto-start-daemon"].(bool); ok && autoStart {
+							fmt.Fprintf(os.Stderr, "Error: auto-start-daemon=true is not supported with backend=markdown\n")
+							fmt.Fprintf(os.Stderr, "The markdown backend does not support daemon mode.\n")
+							fmt.Fprintf(os.Stderr, "Set auto-start-daemon=false in %s or remove the setting.\n", configFile)
+							os.Exit(1)
+						}
+					}
+				}
+			}
+
 			noDaemon = true
 			daemonStatus.FallbackReason = FallbackDaemonUnsupported
 			if os.Getenv("BD_DEBUG") != "" {
@@ -654,6 +680,12 @@ func shouldAutoStartDaemon() bool {
 	noDaemon := strings.ToLower(strings.TrimSpace(os.Getenv("BEADS_NO_DAEMON")))
 	if noDaemon == "1" || noDaemon == "true" || noDaemon == "yes" || noDaemon == "on" {
 		return false // Explicit opt-out
+	}
+
+	// Disable daemon for markdown backend (no benefit from in-memory caching)
+	// Markdown backend must validate disk state on each operation due to external edits
+	if config.GetString("backend") == "markdown" {
+		return false
 	}
 
 	// Use viper to read from config file or BEADS_AUTO_START_DAEMON env var
