@@ -169,7 +169,14 @@ func derivePrefixFromMarkdownPath(rootPath string) string {
 
 // CreateIssues creates multiple issues atomically
 func (m *MarkdownStorage) CreateIssues(ctx context.Context, issues []*types.Issue, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	// For markdown backend, we don't have true atomicity across multiple files
+	// But we can create them one by one
+	for _, issue := range issues {
+		if err := m.CreateIssue(ctx, issue, actor); err != nil {
+			return fmt.Errorf("failed to create issue %s: %w", issue.ID, err)
+		}
+	}
+	return nil
 }
 
 // GetIssue retrieves an issue by ID
@@ -190,10 +197,12 @@ func (m *MarkdownStorage) GetIssue(ctx context.Context, id string) (*types.Issue
 				// Read from lock file
 				data, err = os.ReadFile(lockFiles[0])
 				if err != nil {
-					return nil, fmt.Errorf("issue not found: %s", id)
+					// Issue doesn't exist - return nil to match SQLite behavior
+					return nil, nil
 				}
 			} else {
-				return nil, fmt.Errorf("issue not found: %s", id)
+				// Issue doesn't exist - return nil to match SQLite behavior
+				return nil, nil
 			}
 		} else {
 			return nil, fmt.Errorf("failed to read issue: %w", err)
