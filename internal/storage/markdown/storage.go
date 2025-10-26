@@ -90,6 +90,34 @@ var _ storage.Storage = (*MarkdownStorage)(nil)
 
 // CreateIssue creates a new issue
 func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, actor string) error {
+	// Validate issue before creating
+	if err := issue.Validate(); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Set timestamps
+	now := time.Now()
+	issue.CreatedAt = now
+	issue.UpdatedAt = now
+
+	// Generate ID if not set
+	if issue.ID == "" {
+		// Get prefix from config
+		prefix, err := m.GetConfig(ctx, "issue_prefix")
+		if err != nil || prefix == "" {
+			// Config not set - derive prefix from path
+			prefix = derivePrefixFromMarkdownPath(m.rootDir)
+		}
+
+		// Get next ID using counter
+		nextID, err := m.IncrementCounter(ctx, prefix)
+		if err != nil {
+			return fmt.Errorf("failed to generate issue ID: %w", err)
+		}
+
+		issue.ID = fmt.Sprintf("%s-%d", prefix, nextID)
+	}
+
 	issuePath := m.getIssuePath(issue.ID)
 
 	// Check if issue already exists
@@ -116,6 +144,27 @@ func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, a
 	}
 
 	return nil
+}
+
+// derivePrefixFromMarkdownPath derives a prefix from the markdown storage path
+func derivePrefixFromMarkdownPath(rootPath string) string {
+	// Try to get from parent directory name
+	// .beads/markdown.db -> look at .beads parent
+	beadsDir := filepath.Dir(rootPath)
+	projectDir := filepath.Dir(beadsDir)
+	projectName := filepath.Base(projectDir)
+
+	// Clean up the project name to make a valid prefix
+	prefix := strings.ToLower(projectName)
+	prefix = strings.ReplaceAll(prefix, " ", "-")
+	prefix = strings.ReplaceAll(prefix, "_", "-")
+
+	// Fallback if project name is weird
+	if prefix == "" || prefix == "." || prefix == ".." {
+		prefix = "bd"
+	}
+
+	return prefix
 }
 
 // CreateIssues creates multiple issues atomically
