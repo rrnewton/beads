@@ -518,7 +518,23 @@ func openStorage(dbPath string) (storage.Storage, error) {
 			beadsDir := filepath.Dir(dbPath)
 			markdownPath = filepath.Join(beadsDir, "markdown.db")
 		}
-		return markdown.New(markdownPath)
+		store, err := markdown.New(markdownPath)
+		if err != nil {
+			return nil, err
+		}
+
+		// Sync prefix from global config to backend config if needed
+		ctx := context.Background()
+		if _, err := store.GetConfig(ctx, "issue_prefix"); err != nil {
+			// Backend config doesn't have prefix, check global config
+			globalPrefix := config.GetString("issue-prefix")
+			if globalPrefix != "" {
+				// Copy prefix from global config to backend config
+				_ = store.SetConfig(ctx, "issue_prefix", globalPrefix)
+			}
+		}
+
+		return store, nil
 	case "sqlite":
 		return sqlite.New(dbPath)
 	default:
