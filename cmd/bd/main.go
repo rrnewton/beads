@@ -224,6 +224,16 @@ var rootCmd = &cobra.Command{
 			FallbackReason:   FallbackNone,
 		}
 
+		// Skip daemon mode for markdown backend (daemon doesn't support it yet)
+		backend := detectBackend(dbPath)
+		if backend == "markdown" {
+			noDaemon = true
+			daemonStatus.FallbackReason = FallbackDaemonUnsupported
+			if os.Getenv("BD_DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "Debug: markdown backend doesn't support daemon mode, using direct mode\n")
+			}
+		}
+
 		// Try to connect to daemon first (unless --no-daemon flag is set)
 		if noDaemon {
 			daemonStatus.FallbackReason = FallbackFlagNoDaemon
