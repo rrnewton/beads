@@ -47,10 +47,14 @@ func applyUpdates(issue *types.Issue, updates map[string]interface{}) error {
 			}
 
 		case "status":
-			if v, ok := value.(string); ok {
+			// Handle both string and types.Status
+			switch v := value.(type) {
+			case string:
 				issue.Status = types.Status(v)
-			} else {
-				return fmt.Errorf("invalid type for status: expected string")
+			case types.Status:
+				issue.Status = v
+			default:
+				return fmt.Errorf("invalid type for status: expected string or types.Status")
 			}
 
 		case "priority":
@@ -67,17 +71,24 @@ func applyUpdates(issue *types.Issue, updates map[string]interface{}) error {
 			}
 
 		case "issue_type":
-			if v, ok := value.(string); ok {
+			// Handle both string and types.IssueType
+			switch v := value.(type) {
+			case string:
 				issue.IssueType = types.IssueType(v)
-			} else {
-				return fmt.Errorf("invalid type for issue_type: expected string")
+			case types.IssueType:
+				issue.IssueType = v
+			default:
+				return fmt.Errorf("invalid type for issue_type: expected string or types.IssueType")
 			}
 
 		case "assignee":
-			if v, ok := value.(string); ok {
+			// Handle both string and nil
+			if value == nil {
+				issue.Assignee = ""
+			} else if v, ok := value.(string); ok {
 				issue.Assignee = v
 			} else {
-				return fmt.Errorf("invalid type for assignee: expected string")
+				return fmt.Errorf("invalid type for assignee: expected string or nil")
 			}
 
 		case "external_ref":
