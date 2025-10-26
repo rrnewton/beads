@@ -296,22 +296,202 @@ func (m *MarkdownStorage) SearchIssues(ctx context.Context, query string, filter
 
 // CreateDependency creates a dependency between two issues
 func (m *MarkdownStorage) CreateDependency(ctx context.Context, from, to, depType string) error {
-	return fmt.Errorf("not yet implemented")
+	// Lock the "from" issue
+	lock, err := m.lockFile(from)
+	if err != nil {
+		return fmt.Errorf("failed to lock issue: %w", err)
+	}
+	defer func() {
+		if lock != nil {
+			_ = m.unlockFile(lock)
+		}
+	}()
+
+	// Read current issue
+	data, err := os.ReadFile(lock.lockPath)
+	if err != nil {
+		return fmt.Errorf("failed to read issue: %w", err)
+	}
+
+	issue, err := markdownToIssue(from, data)
+	if err != nil {
+		return fmt.Errorf("failed to parse issue: %w", err)
+	}
+
+	// Check if dependency already exists
+	for _, dep := range issue.Dependencies {
+		if dep.DependsOnID == to {
+			// Dependency already exists, update type if different
+			if string(dep.Type) != depType {
+				dep.Type = types.DependencyType(depType)
+			} else {
+				// Already exists with same type, nothing to do
+				return nil
+			}
+			break
+		}
+	}
+
+	// Add new dependency
+	issue.Dependencies = append(issue.Dependencies, &types.Dependency{
+		IssueID:     from,
+		DependsOnID: to,
+		Type:        types.DependencyType(depType),
+	})
+
+	// Update timestamp
+	issue.UpdatedAt = time.Now()
+
+	// Convert to markdown
+	updatedData, err := issueToMarkdown(issue)
+	if err != nil {
+		return fmt.Errorf("failed to convert to markdown: %w", err)
+	}
+
+	// Write to temp file
+	tempPath := m.getTempPath(from)
+	if err := os.WriteFile(tempPath, updatedData, 0640); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Commit changes
+	if err := m.commitFile(lock, tempPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed to commit changes: %w", err)
+	}
+
+	lock = nil
+	return nil
 }
 
 // DeleteDependency deletes a dependency
 func (m *MarkdownStorage) DeleteDependency(ctx context.Context, from, to string) error {
-	return fmt.Errorf("not yet implemented")
+	// Lock the "from" issue
+	lock, err := m.lockFile(from)
+	if err != nil {
+		return fmt.Errorf("failed to lock issue: %w", err)
+	}
+	defer func() {
+		if lock != nil {
+			_ = m.unlockFile(lock)
+		}
+	}()
+
+	// Read current issue
+	data, err := os.ReadFile(lock.lockPath)
+	if err != nil {
+		return fmt.Errorf("failed to read issue: %w", err)
+	}
+
+	issue, err := markdownToIssue(from, data)
+	if err != nil {
+		return fmt.Errorf("failed to parse issue: %w", err)
+	}
+
+	// Find and remove the dependency
+	found := false
+	newDeps := make([]*types.Dependency, 0, len(issue.Dependencies))
+	for _, dep := range issue.Dependencies {
+		if dep.DependsOnID == to {
+			found = true
+			continue
+		}
+		newDeps = append(newDeps, dep)
+	}
+
+	if !found {
+		// Dependency doesn't exist, nothing to do
+		return nil
+	}
+
+	issue.Dependencies = newDeps
+
+	// Update timestamp
+	issue.UpdatedAt = time.Now()
+
+	// Convert to markdown
+	updatedData, err := issueToMarkdown(issue)
+	if err != nil {
+		return fmt.Errorf("failed to convert to markdown: %w", err)
+	}
+
+	// Write to temp file
+	tempPath := m.getTempPath(from)
+	if err := os.WriteFile(tempPath, updatedData, 0640); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Commit changes
+	if err := m.commitFile(lock, tempPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed to commit changes: %w", err)
+	}
+
+	lock = nil
+	return nil
 }
 
 // GetDependencies returns all dependencies of an issue (as Issue objects)
 func (m *MarkdownStorage) GetDependencies(ctx context.Context, issueID string) ([]*types.Issue, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// Get the issue
+	issue, err := m.GetIssue(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get issue: %w", err)
+	}
+
+	// Get all the dependent issues
+	var dependencies []*types.Issue
+	for _, dep := range issue.Dependencies {
+		depIssue, err := m.GetIssue(ctx, dep.DependsOnID)
+		if err != nil {
+			// Skip dependencies that can't be found
+			continue
+		}
+		dependencies = append(dependencies, depIssue)
+	}
+
+	return dependencies, nil
 }
 
 // GetDependents returns all issues that depend on this issue (as Issue objects)
 func (m *MarkdownStorage) GetDependents(ctx context.Context, issueID string) ([]*types.Issue, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// Scan all issues to find ones that depend on this issue
+	entries, err := os.ReadDir(m.issuesDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read issues directory: %w", err)
+	}
+
+	var dependents []*types.Issue
+	for _, entry := range entries {
+		// Skip non-markdown files
+		if entry.IsDir() || !hasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		// Skip lock/temp/trash files
+		if contains(entry.Name(), ".lock.") || contains(entry.Name(), ".tmp.") || contains(entry.Name(), ".trash.") {
+			continue
+		}
+
+		// Get issue ID from filename
+		otherID := entry.Name()[:len(entry.Name())-3]
+
+		// Get the issue
+		otherIssue, err := m.GetIssue(ctx, otherID)
+		if err != nil {
+			continue
+		}
+
+		// Check if this issue depends on the target issue
+		for _, dep := range otherIssue.Dependencies {
+			if dep.DependsOnID == issueID {
+				dependents = append(dependents, otherIssue)
+				break
+			}
+		}
+	}
+
+	return dependents, nil
 }
 
 // RenameDependencyPrefix updates dependencies when renaming prefix
