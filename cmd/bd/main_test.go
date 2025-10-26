@@ -18,8 +18,6 @@ import (
 	"github.com/steveyegge/beads/internal/types"
 )
 
-const windowsOS = "windows"
-
 // TestAutoFlushDirtyMarking tests that markDirtyAndScheduleFlush() correctly marks DB as dirty
 func TestAutoFlushDirtyMarking(t *testing.T) {
 	// Reset auto-flush state
