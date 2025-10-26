@@ -510,7 +510,15 @@ func openStorage(dbPath string) (storage.Storage, error) {
 	switch backend {
 	case "markdown":
 		// For markdown backend, dbPath should point to markdown.db directory
-		return markdown.New(dbPath)
+		// If dbPath points to a .db file (sqlite path), convert it to markdown.db directory
+		markdownPath := dbPath
+		if strings.HasSuffix(dbPath, ".db") && !strings.HasSuffix(dbPath, "markdown.db") {
+			// dbPath is a SQLite file path like .beads/prefix.db
+			// Convert to .beads/markdown.db directory
+			beadsDir := filepath.Dir(dbPath)
+			markdownPath = filepath.Join(beadsDir, "markdown.db")
+		}
+		return markdown.New(markdownPath)
 	case "sqlite":
 		return sqlite.New(dbPath)
 	default:
