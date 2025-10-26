@@ -174,6 +174,7 @@ Options:
 ### Viewing Issues
 
 ```bash
+bd info                                    # Show database path and daemon status
 bd show bd-1                               # Show full details
 bd list                                    # List all issues
 bd list --status open                      # Filter by status
@@ -183,6 +184,7 @@ bd list --label=backend,urgent             # Filter by labels (AND)
 bd list --label-any=frontend,backend       # Filter by labels (OR)
 
 # JSON output for agents
+bd info --json
 bd list --json
 bd show bd-1 --json
 ```
@@ -234,6 +236,11 @@ bd ready
 bd ready --limit 20
 bd ready --priority 1
 bd ready --assignee alice
+
+# Sort policies (hybrid is default)
+bd ready --sort priority    # Strict priority order (P0, P1, P2, P3)
+bd ready --sort oldest      # Oldest issues first (backlog clearing)
+bd ready --sort hybrid      # Recent by priority, old by age (default)
 
 # Show blocked issues
 bd blocked

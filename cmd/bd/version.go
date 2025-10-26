@@ -11,7 +11,7 @@ import (
 
 var (
 	// Version is the current version of bd (overridden by ldflags at build time)
-	Version = "0.17.0"
+	Version = "0.17.2"
 	// Build can be set via ldflags at compile time
 	Build = "dev"
 )
@@ -55,7 +55,7 @@ func showDaemonVersion() {
 		fmt.Fprintf(os.Stderr, "Hint: start daemon with 'bd daemon'\n")
 		os.Exit(1)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	health, err := client.Health()
 	if err != nil {

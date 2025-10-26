@@ -375,7 +375,7 @@ func removeIssueFromJSONL(issueID string) error {
 
 // deleteBatch handles deletion of multiple issues
 //nolint:unparam // cmd parameter required for potential future use
-func deleteBatch(cmd *cobra.Command, issueIDs []string, force bool, dryRun bool, cascade bool) {
+func deleteBatch(_ *cobra.Command, issueIDs []string, force bool, dryRun bool, cascade bool) {
 	// Ensure we have a direct store when daemon lacks delete support
 	if daemonClient != nil {
 		if err := ensureDirectMode("daemon does not support delete command"); err != nil {
@@ -606,7 +606,7 @@ func readIssueIDsFromFile(filename string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var ids []string
 	scanner := bufio.NewScanner(f)

@@ -20,7 +20,7 @@ var initCmd = &cobra.Command{
 and database file. Optionally specify a custom issue prefix.
 
 With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLite database.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		prefix, _ := cmd.Flags().GetString("prefix")
 		quiet, _ := cmd.Flags().GetBool("quiet")
 
@@ -134,7 +134,7 @@ bd.db
 # Keep JSONL exports (source of truth for git)
 !*.jsonl
 `
-			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0600); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
 				// Non-fatal - continue anyway
 			}
@@ -211,7 +211,7 @@ if quiet {
 		// Prompt to install
 		fmt.Printf("Install git hooks now? [Y/n] ")
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Scanln(&response) // ignore EOF on empty input
 		response = strings.ToLower(strings.TrimSpace(response))
 		
 		if response == "" || response == "y" || response == "yes" {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,8 @@ import (
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
+
+const windowsOS = "windows"
 
 // TestAutoFlushDirtyMarking tests that markDirtyAndScheduleFlush() correctly marks DB as dirty
 func TestAutoFlushDirtyMarking(t *testing.T) {
@@ -555,6 +558,10 @@ func TestAutoFlushJSONLContent(t *testing.T) {
 
 // TestAutoFlushErrorHandling tests error scenarios in flush operations
 func TestAutoFlushErrorHandling(t *testing.T) {
+	if runtime.GOOS == windowsOS {
+		t.Skip("chmod-based read-only directory behavior is not reliable on Windows")
+	}
+
 	// Note: We create issues.jsonl as a directory to force os.Create() to fail,
 	// which works even when running as root (unlike chmod-based approaches)
 

@@ -44,6 +44,13 @@ func (s *SQLiteStorage) GetReadyWork(ctx context.Context, filter types.WorkFilte
 		args = append(args, filter.Limit)
 	}
 
+	// Default to hybrid sort for backwards compatibility
+	sortPolicy := filter.SortPolicy
+	if sortPolicy == "" {
+		sortPolicy = types.SortPolicyHybrid
+	}
+	orderBySQL := buildOrderByClause(sortPolicy)
+
 	// Query with recursive CTE to propagate blocking through parent-child hierarchy
 	// Algorithm:
 	// 1. Find issues directly blocked by 'blocks' dependencies
@@ -85,29 +92,15 @@ func (s *SQLiteStorage) GetReadyWork(ctx context.Context, filter types.WorkFilte
 		AND NOT EXISTS (
 		SELECT 1 FROM blocked_transitively WHERE issue_id = i.id
 		)
-		ORDER BY 
-		  -- Hybrid sort: recent issues (48 hours) by priority, then oldest-first
-	  CASE 
-	    WHEN datetime(i.created_at) >= datetime('now', '-48 hours') THEN 0
-	    ELSE 1
-	  END ASC,
-	  CASE 
-	    WHEN datetime(i.created_at) >= datetime('now', '-48 hours') THEN i.priority
-	    ELSE NULL
-	  END ASC,
-	  CASE 
-	    WHEN datetime(i.created_at) < datetime('now', '-48 hours') THEN i.created_at
-	    ELSE NULL
-	  END ASC,
-	  i.created_at ASC
-	%s
-	`, whereSQL, limitSQL)
+		%s
+		%s
+	`, whereSQL, orderBySQL, limitSQL)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ready work: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return s.scanIssues(ctx, rows)
 }
@@ -134,7 +127,7 @@ func (s *SQLiteStorage) GetBlockedIssues(ctx context.Context) ([]*types.BlockedI
 	if err != nil {
 		return nil, fmt.Errorf("failed to get blocked issues: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var blocked []*types.BlockedIssue
 	for rows.Next() {
@@ -179,4 +172,33 @@ func (s *SQLiteStorage) GetBlockedIssues(ctx context.Context) ([]*types.BlockedI
 	}
 
 	return blocked, nil
+}
+
+// buildOrderByClause generates the ORDER BY clause based on sort policy
+func buildOrderByClause(policy types.SortPolicy) string {
+	switch policy {
+	case types.SortPolicyPriority:
+		return `ORDER BY i.priority ASC, i.created_at ASC`
+
+	case types.SortPolicyOldest:
+		return `ORDER BY i.created_at ASC`
+
+	case types.SortPolicyHybrid:
+		fallthrough
+	default:
+		return `ORDER BY
+			CASE
+				WHEN datetime(i.created_at) >= datetime('now', '-48 hours') THEN 0
+				ELSE 1
+			END ASC,
+			CASE
+				WHEN datetime(i.created_at) >= datetime('now', '-48 hours') THEN i.priority
+				ELSE NULL
+			END ASC,
+			CASE
+				WHEN datetime(i.created_at) < datetime('now', '-48 hours') THEN i.created_at
+				ELSE NULL
+			END ASC,
+			i.created_at ASC`
+	}
 }

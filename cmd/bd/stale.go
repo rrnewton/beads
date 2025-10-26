@@ -153,7 +153,7 @@ func getStaleIssues(thresholdSeconds int) ([]*StaleIssueInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query stale issues: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var staleIssues []*StaleIssueInfo
 	for rows.Next() {
@@ -221,7 +221,7 @@ func releaseStaleIssues(staleIssues []*StaleIssueInfo) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	releaseCount := 0
 	now := time.Now()
@@ -282,13 +282,14 @@ func releaseStaleIssues(staleIssues []*StaleIssueInfo) (int, error) {
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.0f seconds", d.Seconds())
-	} else if d < time.Hour {
-		return fmt.Sprintf("%.0f minutes", d.Minutes())
-	} else if d < 24*time.Hour {
-		return fmt.Sprintf("%.1f hours", d.Hours())
-	} else {
-		return fmt.Sprintf("%.1f days", d.Hours()/24)
 	}
+	if d < time.Hour {
+		return fmt.Sprintf("%.0f minutes", d.Minutes())
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%.1f hours", d.Hours())
+	}
+	return fmt.Sprintf("%.1f days", d.Hours()/24)
 }
 
 func init() {

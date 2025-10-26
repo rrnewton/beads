@@ -29,7 +29,7 @@ var syncCmd = &cobra.Command{
 This command wraps the entire git-based sync workflow for multi-device use.
 
 Use --flush-only to just export pending changes to JSONL (useful for pre-commit hooks).`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		ctx := context.Background()
 
 		message, _ := cmd.Flags().GetString("message")
@@ -288,6 +288,29 @@ func exportToJSONL(ctx context.Context, jsonlPath string) error {
 		return fmt.Errorf("failed to get issues: %w", err)
 	}
 
+	// Safety check: prevent exporting empty database over non-empty JSONL
+	if len(issues) == 0 {
+		existingCount, countErr := countIssuesInJSONL(jsonlPath)
+		if countErr != nil {
+			// If we can't read the file, it might not exist yet, which is fine
+			if !os.IsNotExist(countErr) {
+				fmt.Fprintf(os.Stderr, "Warning: failed to read existing JSONL: %v\n", countErr)
+			}
+		} else if existingCount > 0 {
+			return fmt.Errorf("refusing to export empty database over non-empty JSONL file (database: 0 issues, JSONL: %d issues)", existingCount)
+		}
+	}
+
+	// Warning: check if export would lose >50% of issues
+	existingCount, err := countIssuesInJSONL(jsonlPath)
+	if err == nil && existingCount > 0 {
+		lossPercent := float64(existingCount-len(issues)) / float64(existingCount) * 100
+		if lossPercent > 50 {
+			fmt.Fprintf(os.Stderr, "WARNING: Export would lose %.1f%% of issues (existing: %d, database: %d)\n",
+				lossPercent, existingCount, len(issues))
+		}
+	}
+
 	// Sort by ID for consistent output
 	sort.Slice(issues, func(i, j int) bool {
 		return issues[i].ID < issues[j].ID
@@ -351,8 +374,8 @@ func exportToJSONL(ctx context.Context, jsonlPath string) error {
 		return fmt.Errorf("failed to replace JSONL file: %w", err)
 	}
 
-	// Set appropriate file permissions (0644: rw-r--r--)
-	if err := os.Chmod(jsonlPath, 0644); err != nil {
+	// Set appropriate file permissions (0600: rw-------)
+	if err := os.Chmod(jsonlPath, 0600); err != nil {
 		// Non-fatal warning
 		fmt.Fprintf(os.Stderr, "Warning: failed to set file permissions: %v\n", err)
 	}

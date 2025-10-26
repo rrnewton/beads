@@ -2,7 +2,25 @@
 
 Quick guide for releasing a new version of beads.
 
-## Pre-Release Checklist
+## 🚀 The Easy Way (Recommended)
+
+Use the fully automated release script:
+
+```bash
+./scripts/release.sh 0.9.3
+```
+
+This does **everything**: version bump, tests, git tag, Homebrew update, and local installation.
+
+See [scripts/README.md](scripts/README.md#releasesh--the-easy-button) for details.
+
+---
+
+## 📋 The Manual Way
+
+If you prefer step-by-step control:
+
+### Pre-Release Checklist
 
 1. **Kill all running daemons (CRITICAL)**:
    ```bash
@@ -54,6 +72,7 @@ Use the automated script to update all version files:
 
 ```bash
 ./scripts/bump-version.sh 0.9.X --commit
+git push origin main
 ```
 
 This updates:
@@ -64,6 +83,12 @@ This updates:
 - `integrations/beads-mcp/src/beads_mcp/__init__.py`
 - `README.md`
 - `PLUGIN.md`
+
+**IMPORTANT**: After version bump, rebuild the local binary:
+```bash
+go build -o bd ./cmd/bd
+./bd version  # Should show new version
+```
 
 ## Publish to All Channels
 
@@ -108,19 +133,22 @@ See [integrations/beads-mcp/PYPI.md](integrations/beads-mcp/PYPI.md) for detaile
 
 ### 3. Update Homebrew Formula
 
+**CRITICAL**: This step must be done AFTER pushing the git tag in step 1, otherwise the tarball won't exist yet.
+
 The formula needs the SHA256 of the tag tarball:
 
 ```bash
-# Compute SHA256 from tag
+# Compute SHA256 from tag (wait a few seconds after pushing tag if you get 404)
 curl -sL https://github.com/steveyegge/beads/archive/refs/tags/v0.9.X.tar.gz | shasum -a 256
 
-# Clone tap repo (if not already)
-git clone https://github.com/steveyegge/homebrew-beads /tmp/homebrew-beads
-cd /tmp/homebrew-beads
-git config user.name "Your Name"
-git config user.email "your.email@example.com"
+# Navigate to tap repo (if already cloned) or clone it
+cd /tmp/homebrew-beads || git clone https://github.com/steveyegge/homebrew-beads /tmp/homebrew-beads
 
-# Update Formula/bd.rb:
+# Pull latest changes
+cd /tmp/homebrew-beads
+git pull
+
+# Update Formula/bd.rb (replace version and SHA256):
 # - url: https://github.com/steveyegge/beads/archive/refs/tags/v0.9.X.tar.gz
 # - sha256: <computed SHA256>
 
@@ -128,14 +156,16 @@ git config user.email "your.email@example.com"
 git add Formula/bd.rb
 git commit -m "Update bd formula to v0.9.X"
 git push origin main
-```
 
-Install/upgrade locally with:
-```bash
+# CRITICAL: Verify the installation works
 brew update
 brew upgrade bd  # Or: brew reinstall bd
-bd version  # Verify it shows new version
+bd version  # MUST show v0.9.X - if not, the release is incomplete!
 ```
+
+**⚠️ DO NOT SKIP THE VERIFICATION STEP ABOVE** - This ensures users can actually install the new version.
+
+**Note**: Until this step is complete, users with Homebrew-installed bd will still have the old version.
 
 **Note:** If you have an old bd binary from `go install` in your PATH, remove it to avoid conflicts:
 ```bash
