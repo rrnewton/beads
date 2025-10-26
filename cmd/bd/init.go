@@ -10,7 +10,10 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/markdown"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
+	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
@@ -19,10 +22,21 @@ var initCmd = &cobra.Command{
 	Long: `Initialize bd in the current directory by creating a .beads/ directory
 and database file. Optionally specify a custom issue prefix.
 
+Backend options (--backend):
+  sqlite:   SQLite database (default) - .beads/<prefix>.db
+  markdown: Human-readable markdown files - .beads/markdown.db/issues/*.md
+
 With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLite database.`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		prefix, _ := cmd.Flags().GetString("prefix")
 		quiet, _ := cmd.Flags().GetBool("quiet")
+		backend, _ := cmd.Flags().GetString("backend")
+
+		// Validate backend
+		if backend != "sqlite" && backend != "markdown" {
+			fmt.Fprintf(os.Stderr, "Error: invalid backend '%s'. Must be 'sqlite' or 'markdown'\n", backend)
+			os.Exit(1)
+		}
 
 		// Check BEADS_DB environment variable if --db flag not set
 		// (PersistentPreRun doesn't run for init command)
@@ -46,11 +60,16 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 		// The hyphen is added automatically during ID generation
 		prefix = strings.TrimRight(prefix, "-")
 
-		// Create database
-		// Use global dbPath if set via --db flag or BEADS_DB env var, otherwise default to .beads/{prefix}.db
-		initDBPath := dbPath
-		if initDBPath == "" {
-		 initDBPath = filepath.Join(".beads", prefix+".db")
+		// Determine storage path based on backend
+		var storePath string
+		if dbPath != "" {
+			storePath = dbPath
+		} else {
+			if backend == "markdown" {
+				storePath = filepath.Join(".beads", "markdown.db")
+			} else {
+				storePath = filepath.Join(".beads", prefix+".db")
+			}
 		}
 		
 		// Determine if we should create .beads/ directory in CWD
@@ -62,19 +81,19 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 	}
 	
 	localBeadsDir := filepath.Join(cwd, ".beads")
-	initDBDir := filepath.Dir(initDBPath)
-	
+	storeDir := filepath.Dir(storePath)
+
 	// Convert both to absolute paths for comparison
 	localBeadsDirAbs, err := filepath.Abs(localBeadsDir)
 	if err != nil {
 		localBeadsDirAbs = filepath.Clean(localBeadsDir)
 	}
-	initDBDirAbs, err := filepath.Abs(initDBDir)
+	storeDirAbs, err := filepath.Abs(storeDir)
 	if err != nil {
-		initDBDirAbs = filepath.Clean(initDBDir)
+		storeDirAbs = filepath.Clean(storeDir)
 	}
-	
-	useLocalBeads := filepath.Clean(initDBDirAbs) == filepath.Clean(localBeadsDirAbs)
+
+	useLocalBeads := filepath.Clean(storeDirAbs) == filepath.Clean(localBeadsDirAbs)
 	
 	if useLocalBeads {
 		// Create .beads directory
@@ -114,9 +133,45 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 			return
 		}
 
+		// Create config.yaml in .beads directory
+		configPath := filepath.Join(localBeadsDir, "config.yaml")
+		configData := map[string]interface{}{
+			"backend":      backend,
+			"issue-prefix": prefix,
+		}
+		if backend == "markdown" {
+			// For markdown backend, don't need nodb
+			configData["no-db"] = false
+		}
+
+		configBytes, err := yaml.Marshal(configData)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to marshal config: %v\n", err)
+		} else {
+			if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to create config.yaml: %v\n", err)
+			}
+		}
+
 		// Create .gitignore in .beads directory
 		gitignorePath := filepath.Join(localBeadsDir, ".gitignore")
-		gitignoreContent := `# SQLite databases
+		var gitignoreContent string
+		if backend == "markdown" {
+			gitignoreContent = `# Markdown backend temporary files
+*.tmp.*
+*.lock.*
+*.trash.*
+
+# Daemon runtime files
+daemon.log
+daemon.pid
+bd.sock
+
+# Keep markdown issues (source of truth for git)
+!markdown.db/issues/*.md
+`
+		} else {
+			gitignoreContent = `# SQLite databases
 *.db
 *.db-journal
 *.db-wal
@@ -134,21 +189,28 @@ bd.db
 # Keep JSONL exports (source of truth for git)
 !*.jsonl
 `
-			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0600); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
-				// Non-fatal - continue anyway
-			}
+		}
+		if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0600); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
+			// Non-fatal - continue anyway
+		}
 		}
 	
-		// Ensure parent directory exists for the database
-		if err := os.MkdirAll(initDBDir, 0750); err != nil {
-		 fmt.Fprintf(os.Stderr, "Error: failed to create database directory %s: %v\n", initDBDir, err)
-		 os.Exit(1)
+		// Ensure parent directory exists for the storage
+		if err := os.MkdirAll(storeDir, 0750); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create storage directory %s: %v\n", storeDir, err)
+			os.Exit(1)
 		}
-		
-		store, err := sqlite.New(initDBPath)
+
+		// Create storage backend
+		var store storage.Storage
+		if backend == "markdown" {
+			store, err = markdown.New(storePath)
+		} else {
+			store, err = sqlite.New(storePath)
+		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to create database: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: failed to create %s backend: %v\n", backend, err)
 			os.Exit(1)
 		}
 
@@ -173,7 +235,7 @@ bd.db
 		fmt.Fprintf(os.Stderr, "\n✓ Database initialized. Found %d issues in git, importing...\n", issueCount)
 		}
 		
-		if err := importFromGit(ctx, initDBPath, store, jsonlPath); err != nil {
+		if err := importFromGit(ctx, storePath, store, jsonlPath); err != nil {
 		if !quiet {
 		fmt.Fprintf(os.Stderr, "Warning: auto-import failed: %v\n", err)
 		fmt.Fprintf(os.Stderr, "Try manually: git show HEAD:%s | bd import -i /dev/stdin\n", jsonlPath)
@@ -195,10 +257,16 @@ if quiet {
 
 		green := color.New(color.FgGreen).SprintFunc()
 		cyan := color.New(color.FgCyan).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
+		yellow := color.New(color.FgYellow).SprintFunc()
 
 		fmt.Printf("\n%s bd initialized successfully!\n\n", green("✓"))
-		fmt.Printf("  Database: %s\n", cyan(initDBPath))
+		fmt.Printf("  Backend: %s\n", cyan(backend))
+		if backend == "markdown" {
+			fmt.Printf("  Storage: %s\n", cyan(storePath))
+			fmt.Printf("  Issues directory: %s\n", cyan(filepath.Join(storePath, "issues")))
+		} else {
+			fmt.Printf("  Database: %s\n", cyan(storePath))
+		}
 		fmt.Printf("  Issue prefix: %s\n", cyan(prefix))
 		fmt.Printf("  Issues will be named: %s\n\n", cyan(prefix+"-1, "+prefix+"-2, ..."))
 	
@@ -231,6 +299,7 @@ if quiet {
 func init() {
 	initCmd.Flags().StringP("prefix", "p", "", "Issue prefix (default: current directory name)")
 	initCmd.Flags().BoolP("quiet", "q", false, "Suppress output (quiet mode)")
+	initCmd.Flags().String("backend", "sqlite", "Storage backend: sqlite or markdown")
 	rootCmd.AddCommand(initCmd)
 }
 

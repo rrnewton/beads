@@ -11,6 +11,7 @@ import (
 
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
+	"gopkg.in/yaml.v3"
 )
 
 // MarkdownStorage implements storage.Storage using markdown files
@@ -532,19 +533,23 @@ func (m *MarkdownStorage) GetEvents(ctx context.Context, issueID string, limit i
 
 // Config/Metadata operations
 func (m *MarkdownStorage) GetConfig(ctx context.Context, key string) (string, error) {
-	return "", fmt.Errorf("not yet implemented")
+	configPath := filepath.Join(m.rootDir, "config.yaml")
+	return m.getYAMLValue(configPath, key)
 }
 
 func (m *MarkdownStorage) SetConfig(ctx context.Context, key, value string) error {
-	return fmt.Errorf("not yet implemented")
+	configPath := filepath.Join(m.rootDir, "config.yaml")
+	return m.setYAMLValue(configPath, key, value)
 }
 
 func (m *MarkdownStorage) GetMetadata(ctx context.Context, key string) (string, error) {
-	return "", fmt.Errorf("not yet implemented")
+	metadataPath := filepath.Join(m.rootDir, "metadata.yaml")
+	return m.getYAMLValue(metadataPath, key)
 }
 
 func (m *MarkdownStorage) SetMetadata(ctx context.Context, key, value string) error {
-	return fmt.Errorf("not yet implemented")
+	metadataPath := filepath.Join(m.rootDir, "metadata.yaml")
+	return m.setYAMLValue(metadataPath, key, value)
 }
 
 // Counter operations
@@ -567,4 +572,61 @@ func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error {
 // GetLabels returns labels for an issue
 func (m *MarkdownStorage) GetLabels(ctx context.Context, issueID string) ([]string, error) {
 	return nil, fmt.Errorf("not yet implemented")
+}
+
+// getYAMLValue reads a value from a YAML file
+func (m *MarkdownStorage) getYAMLValue(filePath, key string) (string, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("key not found: %s", key)
+		}
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var values map[string]interface{}
+	if err := yaml.Unmarshal(data, &values); err != nil {
+		return "", fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	value, exists := values[key]
+	if !exists {
+		return "", fmt.Errorf("key not found: %s", key)
+	}
+
+	// Convert to string
+	return fmt.Sprintf("%v", value), nil
+}
+
+// setYAMLValue writes a value to a YAML file
+func (m *MarkdownStorage) setYAMLValue(filePath, key, value string) error {
+	// Read existing values or create new map
+	var values map[string]interface{}
+	data, err := os.ReadFile(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	if len(data) > 0 {
+		if err := yaml.Unmarshal(data, &values); err != nil {
+			return fmt.Errorf("failed to parse YAML: %w", err)
+		}
+	} else {
+		values = make(map[string]interface{})
+	}
+
+	// Set the value
+	values[key] = value
+
+	// Write back to file
+	newData, err := yaml.Marshal(values)
+	if err != nil {
+		return fmt.Errorf("failed to marshal YAML: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, newData, 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
 }
