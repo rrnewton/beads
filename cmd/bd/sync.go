@@ -32,6 +32,13 @@ Use --flush-only to just export pending changes to JSONL (useful for pre-commit 
 	Run: func(cmd *cobra.Command, _ []string) {
 		ctx := context.Background()
 
+		// Disable sync when no-json is enabled
+		if noJson {
+			fmt.Fprintf(os.Stderr, "Error: sync command is disabled when --no-json is enabled\n")
+			fmt.Fprintf(os.Stderr, "The backend is the source of truth and JSONL export is disabled\n")
+			os.Exit(1)
+		}
+
 		message, _ := cmd.Flags().GetString("message")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		noPush, _ := cmd.Flags().GetBool("no-push")

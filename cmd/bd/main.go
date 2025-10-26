@@ -110,6 +110,9 @@ var rootCmd = &cobra.Command{
 		if !cmd.Flags().Changed("no-db") {
 			noDb = config.GetBool("no-db")
 		}
+		if !cmd.Flags().Changed("no-json") {
+			noJson = config.GetBool("no-json")
+		}
 		if !cmd.Flags().Changed("db") && dbPath == "" {
 			dbPath = config.GetString("db")
 		}
@@ -122,6 +125,13 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
+		// Validate that no-db and no-json can't both be true
+		if noDb && noJson {
+			fmt.Fprintf(os.Stderr, "Error: --no-db and --no-json cannot both be enabled\n")
+			fmt.Fprintf(os.Stderr, "The data needs to be stored somewhere (either in the database or in JSONL)\n")
+			os.Exit(1)
+		}
+
 		// If sandbox mode is set, enable all sandbox flags
 		if sandboxMode {
 			noDaemon = true
@@ -129,11 +139,11 @@ var rootCmd = &cobra.Command{
 			noAutoImport = true
 		}
 
-		// Set auto-flush based on flag (invert no-auto-flush)
-		autoFlushEnabled = !noAutoFlush
+		// Set auto-flush based on flags (invert no-auto-flush, or disable if no-json)
+		autoFlushEnabled = !noAutoFlush && !noJson
 
-		// Set auto-import based on flag (invert no-auto-import)
-		autoImportEnabled = !noAutoImport
+		// Set auto-import based on flags (invert no-auto-import, or disable if no-json)
+		autoImportEnabled = !noAutoImport && !noJson
 
 		// Handle --no-db mode: load from JSONL, use in-memory storage
 		if noDb {
@@ -1665,6 +1675,7 @@ var (
 	noAutoImport bool
 	sandboxMode  bool
 	noDb         bool // Use --no-db mode: load from JSONL, write back after each command
+	noJson       bool // Disable all JSON export/import (backend is source of truth)
 )
 
 func init() {
@@ -1681,6 +1692,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noAutoImport, "no-auto-import", false, "Disable automatic JSONL import when newer than DB")
 	rootCmd.PersistentFlags().BoolVar(&sandboxMode, "sandbox", false, "Sandbox mode: disables daemon and auto-sync (equivalent to --no-daemon --no-auto-flush --no-auto-import)")
 	rootCmd.PersistentFlags().BoolVar(&noDb, "no-db", false, "Use no-db mode: load from JSONL, no SQLite, write back after each command")
+	rootCmd.PersistentFlags().BoolVar(&noJson, "no-json", false, "Disable all JSON export/import (backend is source of truth)")
 }
 
 // createIssuesFromMarkdown parses a markdown file and creates multiple issues

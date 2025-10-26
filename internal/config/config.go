@@ -72,6 +72,7 @@ func Initialize() error {
 	v.SetDefault("no-auto-flush", false)
 	v.SetDefault("no-auto-import", false)
 	v.SetDefault("no-db", false)
+	v.SetDefault("no-json", false) // Default to false: maintain JSONL sync for backward compatibility
 	v.SetDefault("db", "")
 	v.SetDefault("actor", "")
 	v.SetDefault("backend", "sqlite")
@@ -162,4 +163,12 @@ func AllSettings() map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	return v.AllSettings()
+}
+
+// IsSet checks if a configuration key is set (either in config file, env var, or flag)
+func IsSet(key string) bool {
+	if v == nil {
+		return false
+	}
+	return v.IsSet(key)
 }
