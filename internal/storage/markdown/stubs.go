@@ -34,9 +34,23 @@ func (m *MarkdownStorage) GetDependencyRecords(ctx context.Context, issueID stri
 	return issue.Dependencies, nil
 }
 
-// GetAllDependencyRecords returns all dependency records
+// GetAllDependencyRecords returns all dependency records grouped by issue ID
 func (m *MarkdownStorage) GetAllDependencyRecords(ctx context.Context) (map[string][]*types.Dependency, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// Get all issues
+	issues, err := m.ListIssues(ctx, types.IssueFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues: %w", err)
+	}
+
+	// Build map of dependencies by issue ID
+	depsMap := make(map[string][]*types.Dependency)
+	for _, issue := range issues {
+		if len(issue.Dependencies) > 0 {
+			depsMap[issue.ID] = issue.Dependencies
+		}
+	}
+
+	return depsMap, nil
 }
 
 // GetDependencyTree returns dependency tree
@@ -85,8 +99,9 @@ func (m *MarkdownStorage) AddIssueComment(ctx context.Context, issueID, author, 
 }
 
 // GetIssueComments returns comments for an issue
+// Markdown backend doesn't support comments yet, so return empty list
 func (m *MarkdownStorage) GetIssueComments(ctx context.Context, issueID string) ([]*types.Comment, error) {
-	return nil, fmt.Errorf("comments not yet supported in markdown backend")
+	return []*types.Comment{}, nil
 }
 
 // GetStatistics returns repository statistics
