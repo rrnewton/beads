@@ -59,7 +59,7 @@ func initializeNoDbMode() error {
 	}
 
 	ctx := context.Background()
-	if err := memStore.SetConfig(ctx, "issue_prefix", prefix); err != nil {
+	if err := setIssuePrefix(ctx, memStore, prefix); err != nil {
 		return fmt.Errorf("failed to set prefix: %w", err)
 	}
 

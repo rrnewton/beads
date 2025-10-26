@@ -38,7 +38,7 @@ func getOrCreateStore(_ context.Context, dbPath string, store storage.Storage) (
 
 // Phase 2: Check and handle prefix mismatches
 func handlePrefixMismatch(ctx context.Context, store storage.Storage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
-	configuredPrefix, err := store.GetConfig(ctx, "issue_prefix")
+	configuredPrefix, err := getIssuePrefix(ctx, store)
 	if err != nil {
 		return fmt.Errorf("failed to get configured prefix: %w", err)
 	}

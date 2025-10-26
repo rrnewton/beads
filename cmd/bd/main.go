@@ -525,12 +525,15 @@ func openStorage(dbPath string) (storage.Storage, error) {
 
 		// Sync prefix from global config to backend config if needed
 		ctx := context.Background()
-		if _, err := store.GetConfig(ctx, "issue_prefix"); err != nil {
+		if _, err := getIssuePrefix(ctx, store); err != nil {
 			// Backend config doesn't have prefix, check global config
-			globalPrefix := config.GetString("issue-prefix")
+			globalPrefix := config.GetString("prefix") // Try new key first
+			if globalPrefix == "" {
+				globalPrefix = config.GetString("issue-prefix") // Fallback to old key
+			}
 			if globalPrefix != "" {
-				// Copy prefix from global config to backend config
-				_ = store.SetConfig(ctx, "issue_prefix", globalPrefix)
+				// Copy prefix from global config to backend config using standardized key
+				_ = setIssuePrefix(ctx, store, globalPrefix)
 			}
 		}
 
@@ -540,6 +543,37 @@ func openStorage(dbPath string) (storage.Storage, error) {
 	default:
 		return sqlite.New(dbPath)
 	}
+}
+
+// getIssuePrefix gets the issue prefix with backward compatibility
+// Tries: prefix, issue_prefix, issue-prefix (from global config)
+func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) {
+	// Try new standardized key first
+	if prefix, err := store.GetConfig(ctx, "prefix"); err == nil && prefix != "" {
+		return prefix, nil
+	}
+
+	// Try old backend key
+	if prefix, err := store.GetConfig(ctx, "issue_prefix"); err == nil && prefix != "" {
+		return prefix, nil
+	}
+
+	// Try global config (Viper) with hyphenated key
+	if prefix := config.GetString("issue-prefix"); prefix != "" {
+		return prefix, nil
+	}
+
+	// Try global config with new key
+	if prefix := config.GetString("prefix"); prefix != "" {
+		return prefix, nil
+	}
+
+	return "", fmt.Errorf("prefix not configured")
+}
+
+// setIssuePrefix sets the issue prefix using the standardized key
+func setIssuePrefix(ctx context.Context, store storage.Storage, prefix string) error {
+	return store.SetConfig(ctx, "prefix", prefix)
 }
 
 // detectBackend determines which storage backend to use
@@ -1838,7 +1872,7 @@ var createCmd = &cobra.Command{
 					// For now, skip validation in daemon mode (needs RPC enhancement)
 				} else {
 					// Direct mode - check config
-					dbPrefix, _ = store.GetConfig(ctx, "issue_prefix")
+					dbPrefix, _ = getIssuePrefix(ctx, store)
 				}
 
 				if dbPrefix != "" && dbPrefix != requestedPrefix {
@@ -2017,7 +2051,7 @@ func resolveIssueID(ctx context.Context, id string) (*types.Issue, string, error
 	}
 
 	// ID is a bare number - try with prefix
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
+	prefix, err := getIssuePrefix(ctx, store)
 	if err != nil || prefix == "" {
 		// No prefix configured, can't do fallback
 		return nil, id, nil

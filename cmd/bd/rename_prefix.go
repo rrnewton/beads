@@ -62,7 +62,7 @@ Example:
 			os.Exit(1)
 		}
 
-		oldPrefix, err := store.GetConfig(ctx, "issue_prefix")
+		oldPrefix, err := getIssuePrefix(ctx, store)
 		if err != nil || oldPrefix == "" {
 			fmt.Fprintf(os.Stderr, "Error: failed to get current prefix: %v\n", err)
 			os.Exit(1)
@@ -114,7 +114,7 @@ Example:
 		if len(issues) == 0 {
 			fmt.Printf("No issues to rename. Updating prefix to %s\n", newPrefix)
 			if !dryRun {
-				if err := store.SetConfig(ctx, "issue_prefix", newPrefix); err != nil {
+				if err := setIssuePrefix(ctx, store, newPrefix); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: failed to update prefix: %v\n", err)
 					os.Exit(1)
 				}
@@ -352,7 +352,7 @@ func repairPrefixes(ctx context.Context, st storage.Storage, actorName string, t
 	}
 
 	// Set the new prefix in config
-	if err := st.SetConfig(ctx, "issue_prefix", targetPrefix); err != nil {
+	if err := setIssuePrefix(ctx, st, targetPrefix); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
@@ -423,7 +423,7 @@ func renamePrefixInDB(ctx context.Context, oldPrefix, newPrefix string, issues [
 		return fmt.Errorf("failed to update counter: %w", err)
 	}
 
-	if err := store.SetConfig(ctx, "issue_prefix", newPrefix); err != nil {
+	if err := setIssuePrefix(ctx, store, newPrefix); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 

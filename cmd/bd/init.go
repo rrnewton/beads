@@ -133,15 +133,30 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 			return
 		}
 
-		// Create config.yaml in .beads directory
+		// Create or update config.yaml in .beads directory
 		configPath := filepath.Join(localBeadsDir, "config.yaml")
-		configData := map[string]interface{}{
-			"backend":      backend,
-			"issue-prefix": prefix,
+		configData := make(map[string]interface{})
+
+		// Check if config already exists (from version control)
+		if existingData, err := os.ReadFile(configPath); err == nil {
+			// Parse existing config
+			if err := yaml.Unmarshal(existingData, &configData); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to parse existing config.yaml: %v\n", err)
+				configData = make(map[string]interface{})
+			}
+		}
+
+		// Only set values if not already present (respect existing config)
+		if _, exists := configData["backend"]; !exists {
+			configData["backend"] = backend
+		}
+		if _, exists := configData["prefix"]; !exists {
+			configData["prefix"] = prefix
 		}
 		if backend == "markdown" {
-			// For markdown backend, don't need nodb
-			configData["no-db"] = false
+			if _, exists := configData["no-db"]; !exists {
+				configData["no-db"] = false
+			}
 		}
 
 		configBytes, err := yaml.Marshal(configData)
@@ -214,9 +229,9 @@ bd.db
 			os.Exit(1)
 		}
 
-		// Set the issue prefix in config
+		// Set the issue prefix in backend config using standardized key
 		ctx := context.Background()
-		if err := store.SetConfig(ctx, "issue_prefix", prefix); err != nil {
+		if err := setIssuePrefix(ctx, store, prefix); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix: %v\n", err)
 			_ = store.Close()
 			os.Exit(1)
