@@ -315,60 +315,82 @@ func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error
 - Increment counter atomically
 - For sync: scan all issues and update counters to max ID found
 
-## Implementation Phases
+## Implementation Status (Updated 2025-10-26)
 
-### Phase 1: Core Infrastructure (Week 1)
-- [ ] Create `internal/storage/markdown/` package structure
-- [ ] Implement file locking primitives
-  - [ ] Single-file lock/unlock
-  - [ ] Multi-file lock ordering
-  - [ ] Stale lock detection
-- [ ] Implement markdown parsing/serialization
-  - [ ] YAML frontmatter parser
-  - [ ] Markdown section parser
-  - [ ] Issue → Markdown converter
-  - [ ] Markdown → Issue converter
-- [ ] Basic file operations (read/write with locks)
+### Phase 1: Core Infrastructure ✅ COMPLETE
+- ✅ Create `internal/storage/markdown/` package structure
+- ✅ Implement file locking primitives (lock.go)
+  - ✅ Single-file lock/unlock
+  - ✅ Multi-file lock ordering
+  - ✅ Stale lock detection
+- ✅ Implement markdown parsing/serialization (storage.go)
+  - ✅ YAML frontmatter parser
+  - ✅ Markdown section parser
+  - ✅ Issue → Markdown converter
+  - ✅ Markdown → Issue converter
+- ✅ Basic file operations (read/write with locks)
 
-### Phase 2: Core Issue Operations (Week 2)
-- [ ] Implement CreateIssue
-- [ ] Implement GetIssue
-- [ ] Implement UpdateIssue
-- [ ] Implement DeleteIssue
-- [ ] Implement ListIssues with filters
-- [ ] Add counter management for ID generation
-- [ ] Comprehensive unit tests
+### Phase 2: Core Issue Operations ✅ COMPLETE
+- ✅ Implement CreateIssue
+- ✅ Implement CreateIssues (batch)
+- ✅ Implement GetIssue
+- ✅ Implement UpdateIssue
+- ✅ Implement UpdateIssueID
+- ✅ Implement DeleteIssue
+- ✅ Implement DeleteIssues (batch)
+- ✅ Implement ListIssues with filters
+- ✅ Implement SearchIssues with full-text search
+- ✅ Add counter management for ID generation
+- ✅ Comprehensive unit tests
 
-### Phase 3: Dependencies (Week 3)
-- [ ] Implement dependency CRUD operations (embedded in frontmatter)
-- [ ] Implement GetDependents (scan all issues)
-- [ ] Implement RenameDependencyPrefix
-- [ ] Add tests for dependencies
-- [ ] Comment operations return "not yet supported" errors
+### Phase 3: Dependencies ✅ COMPLETE
+- ✅ Implement CreateDependency (embedded in frontmatter)
+- ✅ Implement DeleteDependency
+- ✅ Implement GetDependencies
+- ✅ Implement GetDependents (scan all issues)
+- ✅ Implement GetDependencyRecords
+- ✅ Implement GetAllDependencyRecords
+- ✅ Implement RenameDependencyPrefix
+- ✅ Add tests for dependencies
 
-### Phase 4: Events & Advanced Features (Week 4)
-- [ ] Implement event logging
-- [ ] Implement SearchIssues with full-text search
-- [ ] Implement batch operations (CreateIssues, DeleteIssues)
-- [ ] Implement UpdateIssueID (rename with reference updates)
-- [ ] Implement label operations
-- [ ] Add performance tests
+### Phase 4: Command Support 🚧 IN PROGRESS
+**P0 - Blocking common workflows:**
+- ❌ Implement CloseIssue (used by: close, epic, merge commands)
+- ❌ Implement AddLabel/RemoveLabel (used by: label command)
+- ❌ Implement AddDependency/RemoveDependency wrappers (used by: dep command)
 
-### Phase 5: Integration & Migration (Week 5)
-- [ ] Add backend configuration to config.yaml
-- [ ] Implement backend factory pattern
-- [ ] Add migration tool: SQLite → Markdown
-- [ ] Add migration tool: Markdown → SQLite
-- [ ] Update CLI to support backend selection
-- [ ] Integration tests with full workflow
+**P1 - MCP server & advanced workflows:**
+- ❌ Implement GetReadyWork (used by: ready command, MCP server)
+- ❌ Implement GetBlockedIssues (used by: blocked command, MCP server)
+- ❌ Implement GetStatistics (used by: stats command, MCP server)
 
-### Phase 6: Comments & Polish (Week 6)
-- [ ] Implement comment storage and operations
-- [ ] Add tests for comments
-- [ ] Add fsync configuration options
-- [ ] Performance benchmarks vs SQLite
-- [ ] Documentation and examples
-- [ ] Update AGENTS.md with backend details
+**P2 - Nice to have:**
+- ❌ Implement GetEpicsEligibleForClosure (used by: epic command)
+- ❌ Implement GetIssuesByLabel (used by: label list command)
+- ❌ Implement GetDependencyTree (used by: dep tree command)
+- ❌ Implement DetectCycles (used by: dep cycles command)
+
+**P3 - Low priority:**
+- ❌ Implement GetAllConfig/DeleteConfig (used by: config commands)
+
+### Phase 5: Integration & Migration ✅ COMPLETE
+- ✅ Add backend configuration to config.yaml
+- ✅ Implement backend factory pattern (init.go)
+- ✅ Update CLI to support backend selection (--backend flag)
+- ✅ Daemon skip for markdown backend
+- ✅ Auto-flush/auto-import support
+- ⚠️ Migration tools (deferred - use JSONL for migration)
+  - Export from SQLite: `bd export -o issues.jsonl`
+  - Init markdown: `bd init --backend markdown`
+  - Import to markdown: `bd import -i issues.jsonl`
+
+### Phase 6: Comments & Polish 🔮 FUTURE
+- ⚠️ Comment operations (stubbed out - return "not yet supported")
+- ⚠️ Event logging (stubbed out - no-op)
+- ⚠️ Fsync configuration options (always enabled)
+- ⚠️ Performance benchmarks vs SQLite
+- ⚠️ Documentation and examples
+- ⚠️ Update AGENTS.md with backend details
 
 ## Testing Strategy
 
