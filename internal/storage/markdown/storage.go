@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
@@ -86,7 +87,32 @@ var _ storage.Storage = (*MarkdownStorage)(nil)
 
 // CreateIssue creates a new issue
 func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	issuePath := m.getIssuePath(issue.ID)
+
+	// Check if issue already exists
+	if _, err := os.Stat(issuePath); err == nil {
+		return fmt.Errorf("issue already exists: %s", issue.ID)
+	}
+
+	// Convert issue to markdown
+	data, err := issueToMarkdown(issue)
+	if err != nil {
+		return fmt.Errorf("failed to convert issue to markdown: %w", err)
+	}
+
+	// Write to temp file first
+	tempPath := m.getTempPath(issue.ID)
+	if err := os.WriteFile(tempPath, data, 0640); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Atomically rename to actual file
+	if err := os.Rename(tempPath, issuePath); err != nil {
+		_ = os.Remove(tempPath) // Cleanup temp file
+		return fmt.Errorf("failed to create issue file: %w", err)
+	}
+
+	return nil
 }
 
 // CreateIssues creates multiple issues atomically
@@ -96,12 +122,93 @@ func (m *MarkdownStorage) CreateIssues(ctx context.Context, issues []*types.Issu
 
 // GetIssue retrieves an issue by ID
 func (m *MarkdownStorage) GetIssue(ctx context.Context, id string) (*types.Issue, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	issuePath := m.getIssuePath(id)
+
+	// Check if file exists (handle locked files too)
+	var data []byte
+	var err error
+
+	// Try to read the normal file first
+	data, err = os.ReadFile(issuePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Check if it's locked by another process
+			lockFiles, _ := filepath.Glob(issuePath + ".lock.*")
+			if len(lockFiles) > 0 {
+				// Read from lock file
+				data, err = os.ReadFile(lockFiles[0])
+				if err != nil {
+					return nil, fmt.Errorf("issue not found: %s", id)
+				}
+			} else {
+				return nil, fmt.Errorf("issue not found: %s", id)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to read issue: %w", err)
+		}
+	}
+
+	// Parse markdown into Issue
+	issue, err := markdownToIssue(id, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse issue: %w", err)
+	}
+
+	return issue, nil
 }
 
 // UpdateIssue updates an existing issue
 func (m *MarkdownStorage) UpdateIssue(ctx context.Context, id string, updates map[string]interface{}, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	// Lock the issue file
+	lock, err := m.lockFile(id)
+	if err != nil {
+		return fmt.Errorf("failed to lock issue: %w", err)
+	}
+	defer func() {
+		if lock != nil {
+			_ = m.unlockFile(lock)
+		}
+	}()
+
+	// Read current issue from lock file
+	data, err := os.ReadFile(lock.lockPath)
+	if err != nil {
+		return fmt.Errorf("failed to read issue: %w", err)
+	}
+
+	issue, err := markdownToIssue(id, data)
+	if err != nil {
+		return fmt.Errorf("failed to parse issue: %w", err)
+	}
+
+	// Apply updates
+	if err := applyUpdates(issue, updates); err != nil {
+		return fmt.Errorf("failed to apply updates: %w", err)
+	}
+
+	// Update timestamp
+	issue.UpdatedAt = time.Now()
+
+	// Convert to markdown
+	updatedData, err := issueToMarkdown(issue)
+	if err != nil {
+		return fmt.Errorf("failed to convert to markdown: %w", err)
+	}
+
+	// Write to temp file
+	tempPath := m.getTempPath(id)
+	if err := os.WriteFile(tempPath, updatedData, 0640); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Commit changes (temp -> actual, lock -> trash)
+	if err := m.commitFile(lock, tempPath); err != nil {
+		_ = os.Remove(tempPath) // Cleanup temp file
+		return fmt.Errorf("failed to commit changes: %w", err)
+	}
+
+	lock = nil // Prevent defer from trying to unlock
+	return nil
 }
 
 // UpdateIssueID renames an issue's ID and updates all references
@@ -111,7 +218,24 @@ func (m *MarkdownStorage) UpdateIssueID(ctx context.Context, oldID, newID string
 
 // DeleteIssue deletes an issue
 func (m *MarkdownStorage) DeleteIssue(ctx context.Context, id string, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	// Lock the issue file
+	lock, err := m.lockFile(id)
+	if err != nil {
+		return fmt.Errorf("failed to lock issue: %w", err)
+	}
+
+	// Remove the lock file (which is the actual issue file now)
+	if err := os.Remove(lock.lockPath); err != nil {
+		_ = m.unlockFile(lock) // Try to restore file
+		return fmt.Errorf("failed to delete issue: %w", err)
+	}
+
+	// Remove from locks map
+	m.locksMu.Lock()
+	delete(m.locks, id)
+	m.locksMu.Unlock()
+
+	return nil
 }
 
 // DeleteIssues deletes multiple issues
@@ -121,7 +245,48 @@ func (m *MarkdownStorage) DeleteIssues(ctx context.Context, ids []string, actor 
 
 // ListIssues lists all issues matching the filter
 func (m *MarkdownStorage) ListIssues(ctx context.Context, filter types.IssueFilter) ([]*types.Issue, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// Read all markdown files in the issues directory
+	entries, err := os.ReadDir(m.issuesDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read issues directory: %w", err)
+	}
+
+	var issues []*types.Issue
+	for _, entry := range entries {
+		// Skip non-files and non-markdown files
+		if entry.IsDir() || !entry.Type().IsRegular() {
+			continue
+		}
+
+		name := entry.Name()
+
+		// Skip lock, temp, and trash files
+		if contains(name, ".lock.") || contains(name, ".tmp.") || contains(name, ".trash.") {
+			continue
+		}
+
+		// Only process .md files
+		if !hasSuffix(name, ".md") {
+			continue
+		}
+
+		// Extract issue ID from filename
+		issueID := name[:len(name)-3] // Remove .md extension
+
+		// Read and parse the issue
+		issue, err := m.GetIssue(ctx, issueID)
+		if err != nil {
+			// Skip issues that can't be read
+			continue
+		}
+
+		// Apply filter
+		if matchesFilter(issue, filter) {
+			issues = append(issues, issue)
+		}
+	}
+
+	return issues, nil
 }
 
 // SearchIssues searches issues by query string
