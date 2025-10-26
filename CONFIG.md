@@ -165,7 +165,8 @@ Configuration keys use dot-notation namespaces to organize settings:
 ### Core Namespaces
 
 - `compact_*` - Compaction settings (see EXTENDING.md)
-- `issue_prefix` - Issue ID prefix (managed by `bd init`)
+- `prefix` - Issue ID prefix (managed by `bd init`)
+  - Note: For backward compatibility, `issue_prefix` is also supported
 
 ### Integration Namespaces
 
