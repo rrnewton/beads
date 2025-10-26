@@ -23,10 +23,12 @@ import (
 	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/markdown"
 	"github.com/steveyegge/beads/internal/storage/memory"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"golang.org/x/mod/semver"
+	"gopkg.in/yaml.v3"
 )
 
 // DaemonStatus captures daemon connection state for the current command
@@ -409,9 +411,9 @@ var rootCmd = &cobra.Command{
 
 		// Fall back to direct storage access
 		var err error
-		store, err = sqlite.New(dbPath)
+		store, err = openStorage(dbPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: failed to open storage: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -487,6 +489,54 @@ var rootCmd = &cobra.Command{
 			_ = store.Close()
 		}
 	},
+}
+
+// openStorage opens the appropriate storage backend based on configuration
+func openStorage(dbPath string) (storage.Storage, error) {
+	// Determine backend from config
+	backend := detectBackend(dbPath)
+
+	// Open the appropriate backend
+	switch backend {
+	case "markdown":
+		// For markdown backend, dbPath should point to markdown.db directory
+		return markdown.New(dbPath)
+	case "sqlite":
+		return sqlite.New(dbPath)
+	default:
+		return sqlite.New(dbPath)
+	}
+}
+
+// detectBackend determines which storage backend to use
+func detectBackend(dbPath string) string {
+	// First check config from viper (which reads .beads/config.yaml)
+	backend := config.GetString("backend")
+	if backend != "" {
+		return backend
+	}
+
+	// Try to detect from path
+	if strings.Contains(dbPath, "markdown.db") {
+		return "markdown"
+	}
+
+	// Check if .beads/config.yaml exists and read it directly
+	cwd, err := os.Getwd()
+	if err == nil {
+		configPath := filepath.Join(cwd, ".beads", "config.yaml")
+		if data, err := os.ReadFile(configPath); err == nil {
+			var cfg map[string]interface{}
+			if err := yaml.Unmarshal(data, &cfg); err == nil {
+				if b, ok := cfg["backend"].(string); ok {
+					return b
+				}
+			}
+		}
+	}
+
+	// Default to sqlite
+	return "sqlite"
 }
 
 // getDebounceDuration returns the auto-flush debounce duration

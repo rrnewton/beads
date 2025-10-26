@@ -25,7 +25,13 @@ func (m *MarkdownStorage) RemoveDependency(ctx context.Context, issueID, depends
 
 // GetDependencyRecords returns raw dependency records
 func (m *MarkdownStorage) GetDependencyRecords(ctx context.Context, issueID string) ([]*types.Dependency, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// Get the issue
+	issue, err := m.GetIssue(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get issue: %w", err)
+	}
+
+	return issue.Dependencies, nil
 }
 
 // GetAllDependencyRecords returns all dependency records

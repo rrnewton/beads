@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -292,7 +294,14 @@ func (m *MarkdownStorage) ListIssues(ctx context.Context, filter types.IssueFilt
 
 // SearchIssues searches issues by query string
 func (m *MarkdownStorage) SearchIssues(ctx context.Context, query string, filter types.IssueFilter) ([]*types.Issue, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	// For markdown backend, we just use ListIssues with filters
+	// The query parameter can be used for full-text search in the future
+	// For now, we support title search via filter.TitleSearch
+	if query != "" && filter.TitleSearch == "" {
+		filter.TitleSearch = query
+	}
+
+	return m.ListIssues(ctx, filter)
 }
 
 // CreateDependency creates a dependency between two issues
@@ -554,24 +563,158 @@ func (m *MarkdownStorage) SetMetadata(ctx context.Context, key, value string) er
 
 // Counter operations
 func (m *MarkdownStorage) IncrementCounter(ctx context.Context, prefix string) (int, error) {
-	return 0, fmt.Errorf("not yet implemented")
+	countersPath := filepath.Join(m.rootDir, "counters.yaml")
+
+	// Lock to prevent concurrent updates
+	m.locksMu.Lock()
+	defer m.locksMu.Unlock()
+
+	// Read current counters
+	var counters map[string]int
+	data, err := os.ReadFile(countersPath)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("failed to read counters: %w", err)
+	}
+
+	if len(data) > 0 {
+		if err := yaml.Unmarshal(data, &counters); err != nil {
+			return 0, fmt.Errorf("failed to parse counters: %w", err)
+		}
+	} else {
+		counters = make(map[string]int)
+	}
+
+	// Increment counter
+	counters[prefix]++
+	newValue := counters[prefix]
+
+	// Write back
+	newData, err := yaml.Marshal(counters)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal counters: %w", err)
+	}
+
+	if err := os.WriteFile(countersPath, newData, 0644); err != nil {
+		return 0, fmt.Errorf("failed to write counters: %w", err)
+	}
+
+	return newValue, nil
 }
 
 func (m *MarkdownStorage) GetCounter(ctx context.Context, prefix string) (int, error) {
-	return 0, fmt.Errorf("not yet implemented")
+	countersPath := filepath.Join(m.rootDir, "counters.yaml")
+
+	data, err := os.ReadFile(countersPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to read counters: %w", err)
+	}
+
+	var counters map[string]int
+	if err := yaml.Unmarshal(data, &counters); err != nil {
+		return 0, fmt.Errorf("failed to parse counters: %w", err)
+	}
+
+	return counters[prefix], nil
 }
 
 func (m *MarkdownStorage) RenameCounterPrefix(ctx context.Context, oldPrefix, newPrefix string) error {
-	return fmt.Errorf("not yet implemented")
+	countersPath := filepath.Join(m.rootDir, "counters.yaml")
+
+	m.locksMu.Lock()
+	defer m.locksMu.Unlock()
+
+	var counters map[string]int
+	data, err := os.ReadFile(countersPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read counters: %w", err)
+	}
+
+	if len(data) > 0 {
+		if err := yaml.Unmarshal(data, &counters); err != nil {
+			return fmt.Errorf("failed to parse counters: %w", err)
+		}
+	} else {
+		counters = make(map[string]int)
+	}
+
+	// Rename counter
+	if value, exists := counters[oldPrefix]; exists {
+		counters[newPrefix] = value
+		delete(counters, oldPrefix)
+
+		// Write back
+		newData, err := yaml.Marshal(counters)
+		if err != nil {
+			return fmt.Errorf("failed to marshal counters: %w", err)
+		}
+
+		if err := os.WriteFile(countersPath, newData, 0644); err != nil {
+			return fmt.Errorf("failed to write counters: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error {
-	return fmt.Errorf("not yet implemented")
+	// For markdown backend, scan all issues and update counters
+	entries, err := os.ReadDir(m.issuesDir)
+	if err != nil {
+		return fmt.Errorf("failed to read issues directory: %w", err)
+	}
+
+	counters := make(map[string]int)
+
+	for _, entry := range entries {
+		if entry.IsDir() || !hasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		// Skip lock/temp/trash files
+		if contains(entry.Name(), ".lock.") || contains(entry.Name(), ".tmp.") || contains(entry.Name(), ".trash.") {
+			continue
+		}
+
+		// Extract issue ID from filename
+		issueID := entry.Name()[:len(entry.Name())-3]
+
+		// Parse prefix and number
+		parts := strings.Split(issueID, "-")
+		if len(parts) >= 2 {
+			prefix := strings.Join(parts[:len(parts)-1], "-")
+			if num, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+				if num > counters[prefix] {
+					counters[prefix] = num
+				}
+			}
+		}
+	}
+
+	// Write counters
+	countersPath := filepath.Join(m.rootDir, "counters.yaml")
+	data, err := yaml.Marshal(counters)
+	if err != nil {
+		return fmt.Errorf("failed to marshal counters: %w", err)
+	}
+
+	if err := os.WriteFile(countersPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write counters: %w", err)
+	}
+
+	return nil
 }
 
 // GetLabels returns labels for an issue
 func (m *MarkdownStorage) GetLabels(ctx context.Context, issueID string) ([]string, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	issue, err := m.GetIssue(ctx, issueID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get issue: %w", err)
+	}
+
+	return issue.Labels, nil
 }
 
 // getYAMLValue reads a value from a YAML file
