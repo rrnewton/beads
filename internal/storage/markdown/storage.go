@@ -274,7 +274,135 @@ func (m *MarkdownStorage) UpdateIssue(ctx context.Context, id string, updates ma
 
 // UpdateIssueID renames an issue's ID and updates all references
 func (m *MarkdownStorage) UpdateIssueID(ctx context.Context, oldID, newID string, issue *types.Issue, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	// Lock the old issue file
+	lock, err := m.lockFile(oldID)
+	if err != nil {
+		return fmt.Errorf("failed to lock issue: %w", err)
+	}
+	defer func() {
+		if lock != nil {
+			_ = m.unlockFile(lock)
+		}
+	}()
+
+	// Update timestamp
+	issue.UpdatedAt = time.Now()
+
+	// Convert updated issue to markdown
+	updatedData, err := issueToMarkdown(issue)
+	if err != nil {
+		return fmt.Errorf("failed to convert to markdown: %w", err)
+	}
+
+	// Write to new file location
+	newIssuePath := m.getIssuePath(newID)
+	tempPath := m.getTempPath(newID)
+
+	if err := os.WriteFile(tempPath, updatedData, 0640); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Atomically rename temp to new location
+	if err := os.Rename(tempPath, newIssuePath); err != nil {
+		_ = os.Remove(tempPath) // Cleanup temp file
+		return fmt.Errorf("failed to create new issue file: %w", err)
+	}
+
+	// Remove old lock file (which contains the old issue)
+	if err := os.Remove(lock.lockPath); err != nil {
+		// Try to cleanup new file
+		_ = os.Remove(newIssuePath)
+		return fmt.Errorf("failed to delete old issue file: %w", err)
+	}
+
+	// Remove from locks map
+	m.locksMu.Lock()
+	delete(m.locks, oldID)
+	m.locksMu.Unlock()
+
+	// Update dependencies that reference this issue
+	// Scan all issues to find and update dependencies
+	entries, err := os.ReadDir(m.issuesDir)
+	if err != nil {
+		return fmt.Errorf("failed to read issues directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !hasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		// Skip lock/temp/trash files
+		if contains(entry.Name(), ".lock.") || contains(entry.Name(), ".tmp.") || contains(entry.Name(), ".trash.") {
+			continue
+		}
+
+		// Get issue ID from filename
+		otherID := entry.Name()[:len(entry.Name())-3]
+
+		// Skip the issue we just renamed
+		if otherID == newID {
+			continue
+		}
+
+		// Read the issue
+		otherIssue, err := m.GetIssue(ctx, otherID)
+		if err != nil {
+			continue
+		}
+
+		// Check if any dependencies reference the old ID
+		needsUpdate := false
+		for _, dep := range otherIssue.Dependencies {
+			if dep.IssueID == oldID {
+				dep.IssueID = newID
+				needsUpdate = true
+			}
+			if dep.DependsOnID == oldID {
+				dep.DependsOnID = newID
+				needsUpdate = true
+			}
+		}
+
+		// Update the issue file directly if needed
+		if needsUpdate {
+			// Lock the issue
+			otherLock, err := m.lockFile(otherID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to lock %s: %v\n", otherID, err)
+				continue
+			}
+
+			// Update timestamp
+			otherIssue.UpdatedAt = time.Now()
+
+			// Convert to markdown with updated dependencies
+			updatedData, err := issueToMarkdown(otherIssue)
+			if err != nil {
+				_ = m.unlockFile(otherLock)
+				fmt.Fprintf(os.Stderr, "Warning: failed to convert %s to markdown: %v\n", otherID, err)
+				continue
+			}
+
+			// Write to temp file
+			tempPath := m.getTempPath(otherID)
+			if err := os.WriteFile(tempPath, updatedData, 0640); err != nil {
+				_ = m.unlockFile(otherLock)
+				fmt.Fprintf(os.Stderr, "Warning: failed to write temp file for %s: %v\n", otherID, err)
+				continue
+			}
+
+			// Commit changes
+			if err := m.commitFile(otherLock, tempPath); err != nil {
+				_ = os.Remove(tempPath)
+				fmt.Fprintf(os.Stderr, "Warning: failed to commit changes for %s: %v\n", otherID, err)
+				continue
+			}
+		}
+	}
+
+	lock = nil // Prevent defer from trying to unlock
+	return nil
 }
 
 // DeleteIssue deletes an issue
@@ -563,8 +691,10 @@ func (m *MarkdownStorage) GetDependents(ctx context.Context, issueID string) ([]
 }
 
 // RenameDependencyPrefix updates dependencies when renaming prefix
+// For markdown backend, dependency updates are handled in UpdateIssueID
 func (m *MarkdownStorage) RenameDependencyPrefix(ctx context.Context, oldPrefix, newPrefix string) error {
-	return fmt.Errorf("not yet implemented")
+	// No-op: dependencies are already updated in UpdateIssueID
+	return nil
 }
 
 // Comment operations - not yet supported

@@ -32,8 +32,7 @@ Create a new storage backend for beads using exploded markdown files instead of 
 │   ├── events/
 │   │   ├── prefix-1.log     # Audit trail per issue
 │   │   └── ...
-│   ├── metadata.yaml        # Config values (issue_prefix, etc.)
-│   └── counters.yaml        # ID generation counters
+│   └── metadata.yaml        # Config values (issue_prefix, etc.)
 ```
 
 ### Issue File Format: `prefix-123.md`
@@ -134,14 +133,6 @@ JSONL format (one event per line):
 ```yaml
 issue_prefix: prefix
 bd_version: "0.1.0"
-```
-
-### Counters: `counters.yaml`
-
-```yaml
-counters:
-  prefix: 125
-  comment: 450
 ```
 
 ## Locking Protocol
@@ -311,9 +302,11 @@ func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error
 ```
 
 **Implementation**:
-- Lock `counters.yaml`
-- Increment counter atomically
-- For sync: scan all issues and update counters to max ID found
+- **IncrementCounter**: Scan all issue files, find max ID for prefix, return max+1
+- **RenameCounterPrefix**: No-op (counters are derived from filenames)
+- **SyncAllCounters**: No-op (counters are always in sync with files)
+
+**Rationale**: Eliminated `counters.yaml` file. The source of truth is the markdown files themselves. When generating a new ID, we scan existing files to find the maximum ID number for that prefix and add 1. This is simpler and eliminates the need for a separate counter cache that could get out of sync.
 
 ## Implementation Status (Updated 2025-10-26)
 
