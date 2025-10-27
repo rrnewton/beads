@@ -3,6 +3,7 @@ package markdown
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -116,6 +117,26 @@ func applyUpdates(issue *types.Issue, updates map[string]interface{}) error {
 				issue.Labels = labels
 			} else {
 				return fmt.Errorf("invalid type for labels: expected []string")
+			}
+
+		case "closed_at":
+			// Handle time.Time, *time.Time, and nil
+			if value == nil {
+				issue.ClosedAt = nil
+			} else if v, ok := value.(time.Time); ok {
+				issue.ClosedAt = &v
+			} else if v, ok := value.(*time.Time); ok {
+				issue.ClosedAt = v
+			} else {
+				return fmt.Errorf("invalid type for closed_at: expected time.Time or nil")
+			}
+
+		case "updated_at":
+			// Handle time.Time (UpdatedAt is not a pointer)
+			if v, ok := value.(time.Time); ok {
+				issue.UpdatedAt = v
+			} else {
+				return fmt.Errorf("invalid type for updated_at: expected time.Time")
 			}
 
 		default:

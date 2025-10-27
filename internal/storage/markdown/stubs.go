@@ -4,10 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/steveyegge/beads/internal/types"
+	"gopkg.in/yaml.v3"
 )
 
 // CloseIssue closes an issue
@@ -724,12 +727,63 @@ func (m *MarkdownStorage) ClearDirtyIssuesByID(ctx context.Context, issueIDs []s
 
 // GetAllConfig returns all config values
 func (m *MarkdownStorage) GetAllConfig(ctx context.Context) (map[string]string, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	configPath := filepath.Join(m.rootDir, "config.yaml")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No config file yet, return empty map
+			return make(map[string]string), nil
+		}
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var values map[string]interface{}
+	if err := yaml.Unmarshal(data, &values); err != nil {
+		return nil, fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	// Convert all values to strings
+	result := make(map[string]string)
+	for key, value := range values {
+		result[key] = fmt.Sprintf("%v", value)
+	}
+
+	return result, nil
 }
 
 // DeleteConfig deletes a config value
 func (m *MarkdownStorage) DeleteConfig(ctx context.Context, key string) error {
-	return fmt.Errorf("not yet implemented")
+	configPath := filepath.Join(m.rootDir, "config.yaml")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No config file, nothing to delete
+			return nil
+		}
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var values map[string]interface{}
+	if err := yaml.Unmarshal(data, &values); err != nil {
+		return fmt.Errorf("failed to parse config YAML: %w", err)
+	}
+
+	// Delete the key
+	delete(values, key)
+
+	// Write back to file
+	newData, err := yaml.Marshal(values)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config YAML: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, newData, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
 }
 
 // UnderlyingConn returns the underlying SQL connection (not applicable)

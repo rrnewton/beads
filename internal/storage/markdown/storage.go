@@ -3,6 +3,7 @@ package markdown
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -429,7 +430,20 @@ func (m *MarkdownStorage) DeleteIssue(ctx context.Context, id string, actor stri
 
 // DeleteIssues deletes multiple issues
 func (m *MarkdownStorage) DeleteIssues(ctx context.Context, ids []string, actor string) error {
-	return fmt.Errorf("not yet implemented")
+	// Delete each issue individually
+	// Note: This is not atomic across all issues, but markdown backend doesn't support transactions
+	var errors []string
+	for _, id := range ids {
+		if err := m.DeleteIssue(ctx, id, actor); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", id, err))
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("failed to delete some issues: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }
 
 // ListIssues lists all issues matching the filter
@@ -720,12 +734,79 @@ func (m *MarkdownStorage) DeleteComment(ctx context.Context, id string) error {
 
 // RecordEvent records an event
 func (m *MarkdownStorage) RecordEvent(ctx context.Context, event *types.Event) error {
-	return fmt.Errorf("not yet implemented")
+	// Create events file path for this issue
+	eventsPath := filepath.Join(m.rootDir, "events", event.IssueID+".jsonl")
+
+	// Set timestamp if not set
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	// Marshal event to JSON
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	// Append to events file (create if doesn't exist)
+	f, err := os.OpenFile(eventsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
+	if err != nil {
+		return fmt.Errorf("failed to open events file: %w", err)
+	}
+	defer f.Close()
+
+	// Write event as JSONL (one line per event)
+	if _, err := f.Write(data); err != nil {
+		return fmt.Errorf("failed to write event: %w", err)
+	}
+	if _, err := f.Write([]byte("\n")); err != nil {
+		return fmt.Errorf("failed to write newline: %w", err)
+	}
+
+	return nil
 }
 
 // GetEvents retrieves events for an issue
 func (m *MarkdownStorage) GetEvents(ctx context.Context, issueID string, limit int) ([]*types.Event, error) {
-	return nil, fmt.Errorf("not yet implemented")
+	eventsPath := filepath.Join(m.rootDir, "events", issueID+".jsonl")
+
+	// Check if events file exists
+	if _, err := os.Stat(eventsPath); os.IsNotExist(err) {
+		// No events for this issue yet
+		return []*types.Event{}, nil
+	}
+
+	// Read events file
+	data, err := os.ReadFile(eventsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read events file: %w", err)
+	}
+
+	// Parse JSONL
+	lines := strings.Split(string(data), "\n")
+	events := make([]*types.Event, 0, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		var event types.Event
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			// Skip malformed lines
+			continue
+		}
+
+		events = append(events, &event)
+	}
+
+	// Apply limit (return last N events)
+	if limit > 0 && len(events) > limit {
+		events = events[len(events)-limit:]
+	}
+
+	return events, nil
 }
 
 // Config/Metadata operations
