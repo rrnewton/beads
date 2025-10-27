@@ -24,7 +24,7 @@ and database file. Optionally specify a custom issue prefix.
 
 Backend options (--backend):
   sqlite:   SQLite database (default) - .beads/<prefix>.db
-  markdown: Human-readable markdown files - .beads/markdown.db/issues/*.md
+  markdown: Human-readable markdown files - .beads/markdown_db/issues/*.md
 
 With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLite database.`,
 	Run: func(cmd *cobra.Command, _ []string) {
@@ -66,7 +66,7 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 			storePath = dbPath
 		} else {
 			if backend == "markdown" {
-				storePath = filepath.Join(".beads", "markdown.db")
+				storePath = filepath.Join(".beads", "markdown_db")
 			} else {
 				storePath = filepath.Join(".beads", prefix+".db")
 			}
@@ -172,18 +172,20 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 		gitignorePath := filepath.Join(localBeadsDir, ".gitignore")
 		var gitignoreContent string
 		if backend == "markdown" {
-			gitignoreContent = `# Markdown backend temporary files
-*.tmp.*
-*.lock.*
-*.trash.*
+			gitignoreContent = `# Markdown backend - markdown_db/ directory contains source of truth
+
+# Markdown backend temporary files (inside markdown_db/issues/)
+markdown_db/issues/*.tmp.*
+markdown_db/issues/*.lock.*
+markdown_db/issues/*.trash.*
 
 # Daemon runtime files
 daemon.log
 daemon.pid
 bd.sock
 
-# Keep markdown issues (source of truth for git)
-!markdown.db/issues/*.md
+# Note: markdown_db/ directory and its .md files are tracked in git
+# This is the source of truth for the markdown backend
 `
 		} else {
 			gitignoreContent = `# SQLite databases

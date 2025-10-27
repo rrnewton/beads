@@ -152,7 +152,7 @@ type DatabaseInfo struct {
 	IssueCount int   // Number of issues (-1 if unknown)
 }
 
-// findDatabaseInTree walks up the directory tree looking for .beads/*.db or .beads/markdown.db/
+// findDatabaseInTree walks up the directory tree looking for .beads/*.db or .beads/markdown_db/
 func findDatabaseInTree() string {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -163,8 +163,8 @@ func findDatabaseInTree() string {
 	for {
 		beadsDir := filepath.Join(dir, ".beads")
 		if info, err := os.Stat(beadsDir); err == nil && info.IsDir() {
-			// First check for markdown.db directory
-			markdownDB := filepath.Join(beadsDir, "markdown.db")
+			// First check for markdown_db directory
+			markdownDB := filepath.Join(beadsDir, "markdown_db")
 			if mdInfo, err := os.Stat(markdownDB); err == nil && mdInfo.IsDir() {
 				return markdownDB
 			}

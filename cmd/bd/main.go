@@ -545,14 +545,14 @@ func openStorage(dbPath string) (storage.Storage, error) {
 	// Open the appropriate backend
 	switch backend {
 	case "markdown":
-		// For markdown backend, dbPath should point to markdown.db directory
-		// If dbPath points to a .db file (sqlite path), convert it to markdown.db directory
+		// For markdown backend, dbPath should point to markdown_db directory
+		// If dbPath points to a .db file (sqlite path), convert it to markdown_db directory
 		markdownPath := dbPath
-		if strings.HasSuffix(dbPath, ".db") && !strings.HasSuffix(dbPath, "markdown.db") {
+		if strings.HasSuffix(dbPath, ".db") && !strings.HasSuffix(dbPath, "markdown_db") {
 			// dbPath is a SQLite file path like .beads/prefix.db
-			// Convert to .beads/markdown.db directory
+			// Convert to .beads/markdown_db directory
 			beadsDir := filepath.Dir(dbPath)
-			markdownPath = filepath.Join(beadsDir, "markdown.db")
+			markdownPath = filepath.Join(beadsDir, "markdown_db")
 		}
 		store, err := markdown.New(markdownPath)
 		if err != nil {
@@ -592,7 +592,7 @@ func detectBackend(dbPath string) string {
 	}
 
 	// Try to detect from path
-	if strings.Contains(dbPath, "markdown.db") {
+	if strings.Contains(dbPath, "markdown_db") {
 		return "markdown"
 	}
 

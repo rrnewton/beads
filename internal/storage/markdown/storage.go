@@ -20,8 +20,8 @@ import (
 
 // MarkdownStorage implements storage.Storage using markdown files
 type MarkdownStorage struct {
-	rootDir   string           // .beads/markdown.db
-	issuesDir string           // .beads/markdown.db/issues
+	rootDir   string           // .beads/markdown_db
+	issuesDir string           // .beads/markdown_db/issues
 	pid       int              // current process ID
 	locks     map[string]*lock // active locks held by this process
 	locksMu   sync.Mutex       // protects locks map
@@ -151,7 +151,7 @@ func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, a
 // derivePrefixFromMarkdownPath derives a prefix from the markdown storage path
 func derivePrefixFromMarkdownPath(rootPath string) string {
 	// Try to get from parent directory name
-	// .beads/markdown.db -> look at .beads parent
+	// .beads/markdown_db -> look at .beads parent
 	beadsDir := filepath.Dir(rootPath)
 	projectDir := filepath.Dir(beadsDir)
 	projectName := filepath.Base(projectDir)

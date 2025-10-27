@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 var v *viper.Viper
@@ -173,33 +174,86 @@ func IsSet(key string) bool {
 	return v.IsSet(key)
 }
 
-// WriteConfig writes the current configuration to the config file
+// WriteConfig writes only explicitly set configuration values to the config file
+// This prevents polluting the config file with all defaults
 func WriteConfig() error {
 	if v == nil {
 		return fmt.Errorf("viper not initialized")
 	}
-	// Try to write to the existing config file
-	if err := v.WriteConfig(); err != nil {
-		// If config file doesn't exist, try to create it
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Find .beads directory in current working directory or parent
-			cwd, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to get current directory: %w", err)
-			}
 
-			// Walk up to find .beads directory
-			for dir := cwd; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
-				beadsDir := filepath.Join(dir, ".beads")
-				if info, err := os.Stat(beadsDir); err == nil && info.IsDir() {
-					configPath := filepath.Join(beadsDir, "config.yaml")
-					return v.WriteConfigAs(configPath)
-				}
-			}
+	// Find the config file path
+	configPath := v.ConfigFileUsed()
+	if configPath == "" {
+		// Config file doesn't exist yet, find .beads directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
 
+		// Walk up to find .beads directory
+		for dir := cwd; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+			beadsDir := filepath.Join(dir, ".beads")
+			if info, err := os.Stat(beadsDir); err == nil && info.IsDir() {
+				configPath = filepath.Join(beadsDir, "config.yaml")
+				break
+			}
+		}
+
+		if configPath == "" {
 			return fmt.Errorf("no .beads directory found")
 		}
-		return err
 	}
-	return nil
+
+	// Read existing config to preserve manually set values
+	existingConfig := make(map[string]interface{})
+	if data, err := os.ReadFile(configPath); err == nil {
+		_ = yaml.Unmarshal(data, &existingConfig)
+	}
+
+	// Only write values that differ from defaults or were explicitly set
+	// List of keys that should be persisted to config file
+	persistKeys := []string{"backend", "issue_prefix", "no-db", "actor"}
+
+	for _, key := range persistKeys {
+		if v.IsSet(key) {
+			val := v.Get(key)
+			// Only write if value is different from default or already in config
+			if _, exists := existingConfig[key]; exists || !isDefaultValue(key, val) {
+				existingConfig[key] = val
+			}
+		}
+	}
+
+	// Marshal and write
+	data, err := yaml.Marshal(existingConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	return os.WriteFile(configPath, data, 0644)
+}
+
+// isDefaultValue checks if a value is the default for a given key
+func isDefaultValue(key string, val interface{}) bool {
+	defaults := map[string]interface{}{
+		"json":               false,
+		"no-daemon":          false,
+		"no-auto-flush":      false,
+		"no-auto-import":     false,
+		"no-db":              false,
+		"no-json":            false,
+		"db":                 "",
+		"actor":              "",
+		"backend":            "sqlite",
+		"issue_prefix":       "",
+		"flush-debounce":     "5s",
+		"auto-start-daemon":  true,
+	}
+
+	defaultVal, exists := defaults[key]
+	if !exists {
+		return false
+	}
+
+	return val == defaultVal
 }
