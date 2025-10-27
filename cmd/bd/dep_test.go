@@ -8,22 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
 func TestDepAdd(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
+
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -31,7 +27,7 @@ func TestDepAdd(t *testing.T) {
 	// Create test issues
 	issues := []*types.Issue{
 		{
-			ID:        "test-1",
+			ID:        "bd-1",
 			Title:     "Task 1",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -39,7 +35,7 @@ func TestDepAdd(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-2",
+			ID:        "bd-2",
 			Title:     "Task 2",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -56,8 +52,8 @@ func TestDepAdd(t *testing.T) {
 
 	// Add dependency
 	dep := &types.Dependency{
-		IssueID:     "test-1",
-		DependsOnID: "test-2",
+		IssueID:     "bd-1",
+		DependsOnID: "bd-2",
 		Type:        types.DepBlocks,
 		CreatedAt:   time.Now(),
 	}
@@ -67,7 +63,7 @@ func TestDepAdd(t *testing.T) {
 	}
 
 	// Verify dependency was added
-	deps, err := sqliteStore.GetDependencies(ctx, "test-1")
+	deps, err := sqliteStore.GetDependencies(ctx, "bd-1")
 	if err != nil {
 		t.Fatalf("GetDependencies failed: %v", err)
 	}
@@ -76,7 +72,7 @@ func TestDepAdd(t *testing.T) {
 		t.Fatalf("Expected 1 dependency, got %d", len(deps))
 	}
 
-	if deps[0].ID != "test-2" {
+	if deps[0].ID != "bd-2" {
 		t.Errorf("Expected dependency on test-2, got %s", deps[0].ID)
 	}
 }
@@ -84,15 +80,12 @@ func TestDepAdd(t *testing.T) {
 func TestDepTypes(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
+
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -100,7 +93,7 @@ func TestDepTypes(t *testing.T) {
 	// Create test issues
 	for i := 1; i <= 4; i++ {
 		issue := &types.Issue{
-			ID:        fmt.Sprintf("test-%d", i),
+			ID:        fmt.Sprintf("bd-%d", i),
 			Title:     fmt.Sprintf("Task %d", i),
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -118,10 +111,10 @@ func TestDepTypes(t *testing.T) {
 		from    string
 		to      string
 	}{
-		{types.DepBlocks, "test-2", "test-1"},
-		{types.DepRelated, "test-3", "test-1"},
-		{types.DepParentChild, "test-4", "test-1"},
-		{types.DepDiscoveredFrom, "test-3", "test-2"},
+		{types.DepBlocks, "bd-2", "bd-1"},
+		{types.DepRelated, "bd-3", "bd-1"},
+		{types.DepParentChild, "bd-4", "bd-1"},
+		{types.DepDiscoveredFrom, "bd-3", "bd-2"},
 	}
 
 	for _, dt := range depTypes {
@@ -141,15 +134,12 @@ func TestDepTypes(t *testing.T) {
 func TestDepCycleDetection(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
+
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -157,7 +147,7 @@ func TestDepCycleDetection(t *testing.T) {
 	// Create test issues
 	for i := 1; i <= 3; i++ {
 		issue := &types.Issue{
-			ID:        fmt.Sprintf("test-%d", i),
+			ID:        fmt.Sprintf("bd-%d", i),
 			Title:     fmt.Sprintf("Task %d", i),
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -175,8 +165,8 @@ func TestDepCycleDetection(t *testing.T) {
 		from string
 		to   string
 	}{
-		{"test-1", "test-2"},
-		{"test-2", "test-3"},
+		{"bd-1", "bd-2"},
+		{"bd-2", "bd-3"},
 	}
 
 	for _, d := range deps {
@@ -193,8 +183,8 @@ func TestDepCycleDetection(t *testing.T) {
 	
 	// Try to add the third dep which would create a cycle - should fail
 	cycleDep := &types.Dependency{
-		IssueID:     "test-3",
-		DependsOnID: "test-1",
+		IssueID:     "bd-3",
+		DependsOnID: "bd-1",
 		Type:        types.DepBlocks,
 		CreatedAt:   time.Now(),
 	}
@@ -234,15 +224,12 @@ func TestDepCommandsInit(t *testing.T) {
 func TestDepRemove(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
+
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -250,7 +237,7 @@ func TestDepRemove(t *testing.T) {
 	// Create test issues
 	issues := []*types.Issue{
 		{
-			ID:        "test-1",
+			ID:        "bd-1",
 			Title:     "Task 1",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -258,7 +245,7 @@ func TestDepRemove(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-2",
+			ID:        "bd-2",
 			Title:     "Task 2",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -275,8 +262,8 @@ func TestDepRemove(t *testing.T) {
 
 	// Add dependency
 	dep := &types.Dependency{
-		IssueID:     "test-1",
-		DependsOnID: "test-2",
+		IssueID:     "bd-1",
+		DependsOnID: "bd-2",
 		Type:        types.DepBlocks,
 		CreatedAt:   time.Now(),
 	}
@@ -286,12 +273,12 @@ func TestDepRemove(t *testing.T) {
 	}
 
 	// Remove dependency
-	if err := sqliteStore.RemoveDependency(ctx, "test-1", "test-2", "test"); err != nil {
+	if err := sqliteStore.RemoveDependency(ctx, "bd-1", "bd-2", "test"); err != nil {
 		t.Fatalf("RemoveDependency failed: %v", err)
 	}
 
 	// Verify dependency was removed
-	deps, err := sqliteStore.GetDependencies(ctx, "test-1")
+	deps, err := sqliteStore.GetDependencies(ctx, "bd-1")
 	if err != nil {
 		t.Fatalf("GetDependencies failed: %v", err)
 	}
