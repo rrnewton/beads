@@ -105,7 +105,7 @@ func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, a
 	// Generate ID if not set
 	if issue.ID == "" {
 		// Get prefix from global config (.beads/config.yaml)
-		prefix := config.GetString("issue_prefix")
+		prefix := config.GetString("issue-prefix")
 		if prefix == "" {
 			// Config not set - derive prefix from path as fallback
 			prefix = derivePrefixFromMarkdownPath(m.rootDir)

@@ -51,7 +51,7 @@ func TestRenamePrefixCommand(t *testing.T) {
 
 	// Write initial config with old prefix
 	configPath := filepath.Join(beadsDir, "config.yaml")
-	configData := map[string]interface{}{"issue_prefix": "old", "backend": "sqlite"}
+	configData := map[string]interface{}{"issue-prefix": "old", "backend": "sqlite"}
 	configBytes, _ := yaml.Marshal(configData)
 	if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
 		t.Fatalf("Failed to write config.yaml: %v", err)
@@ -144,7 +144,7 @@ func TestRenamePrefixCommand(t *testing.T) {
 		t.Fatalf("Failed to parse config.yaml: %v", err2)
 	}
 
-	newPrefix, ok := cfg["issue_prefix"].(string)
+	newPrefix, ok := cfg["issue-prefix"].(string)
 	if !ok || newPrefix != "new" {
 		t.Errorf("Expected prefix 'new' in config.yaml, got %q", newPrefix)
 	}

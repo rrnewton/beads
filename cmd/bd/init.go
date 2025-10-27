@@ -150,8 +150,8 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 		if _, exists := configData["backend"]; !exists {
 			configData["backend"] = backend
 		}
-		if _, exists := configData["issue_prefix"]; !exists {
-			configData["issue_prefix"] = prefix
+		if _, exists := configData["issue-prefix"]; !exists {
+			configData["issue-prefix"] = prefix
 		}
 		if backend == "markdown" {
 			if _, exists := configData["no-db"]; !exists {

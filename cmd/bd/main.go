@@ -96,7 +96,7 @@ var rootCmd = &cobra.Command{
 
 		// If flag wasn't explicitly set, use viper value
 		if !cmd.Flags().Changed("json") {
-			jsonOutput = config.GetBool("json")
+			jsonOutput = config.GetBool("json-output")
 		}
 		if !cmd.Flags().Changed("no-daemon") {
 			noDaemon = config.GetBool("no-daemon")
@@ -570,7 +570,7 @@ func openStorage(dbPath string) (storage.Storage, error) {
 // getIssuePrefix gets the issue prefix from global config (.beads/config.yaml)
 func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) {
 	// Read from global config only - single source of truth
-	prefix := config.GetString("issue_prefix")
+	prefix := config.GetString("issue-prefix")
 	if prefix == "" {
 		return "", fmt.Errorf("prefix not configured in .beads/config.yaml")
 	}
@@ -579,7 +579,7 @@ func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) 
 
 // updateIssuePrefix updates the issue prefix in global config (.beads/config.yaml)
 func updateIssuePrefix(newPrefix string) error {
-	config.Set("issue_prefix", newPrefix)
+	config.Set("issue-prefix", newPrefix)
 	return config.WriteConfig()
 }
 
@@ -2047,7 +2047,7 @@ func init() {
 
 // resolveIssueID attempts to resolve an issue ID, with a fallback for bare numbers.
 // If the ID doesn't exist and is a bare number (no hyphen), it tries adding the
-// configured issue_prefix. Returns the issue and the resolved ID.
+// configured issue-prefix. Returns the issue and the resolved ID.
 func resolveIssueID(ctx context.Context, id string) (*types.Issue, string, error) {
 	// First try with the provided ID
 	issue, err := store.GetIssue(ctx, id)

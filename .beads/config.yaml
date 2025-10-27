@@ -1,12 +1,2 @@
-actor: ""
-auto-start-daemon: true
 backend: sqlite
-db: ""
-flush-debounce: 5s
-issue_prefix: new
-json: false
-no-auto-flush: false
-no-auto-import: false
-no-daemon: false
-no-db: false
-no-json: false
+issue-prefix: beads

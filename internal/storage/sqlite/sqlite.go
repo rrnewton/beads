@@ -579,7 +579,7 @@ func (s *SQLiteStorage) CreateIssue(ctx context.Context, issue *types.Issue, act
 	// Generate ID if not set (inside transaction to prevent race conditions)
 	if issue.ID == "" {
 		// Get prefix from global config (.beads/config.yaml)
-		prefix := config.GetString("issue_prefix")
+		prefix := config.GetString("issue-prefix")
 		if prefix == "" {
 			// Config not set - derive prefix from database filename as fallback
 			prefix = derivePrefixFromPath(s.dbPath)
@@ -711,7 +711,7 @@ func generateBatchIDs(ctx context.Context, conn *sql.Conn, issues []*types.Issue
 	}
 
 	// Get prefix from global config (.beads/config.yaml)
-	prefix := config.GetString("issue_prefix")
+	prefix := config.GetString("issue-prefix")
 	if prefix == "" {
 		// Config not set - derive prefix from database filename as fallback
 		prefix = derivePrefixFromPath(dbPath)

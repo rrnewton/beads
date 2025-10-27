@@ -68,7 +68,7 @@ func Initialize() error {
 	v.AutomaticEnv()
 
 	// Set defaults for all flags
-	v.SetDefault("json", false)
+	v.SetDefault("json-output", false)
 	v.SetDefault("no-daemon", false)
 	v.SetDefault("no-auto-flush", false)
 	v.SetDefault("no-auto-import", false)
@@ -77,7 +77,7 @@ func Initialize() error {
 	v.SetDefault("db", "")
 	v.SetDefault("actor", "")
 	v.SetDefault("backend", "sqlite")
-	v.SetDefault("issue_prefix", "")
+	v.SetDefault("issue-prefix", "")
 	
 	// Additional environment variables (not prefixed with BD_)
 	// These are bound explicitly for backward compatibility
@@ -97,7 +97,29 @@ func Initialize() error {
 		// Config file not found - this is ok, we'll use defaults
 	}
 
+	// Backwards compatibility: migrate old config keys to new kebab-case keys
+	// TODO: Remove this migration code in a future version (v2.0?)
+	migrateOldConfigKeys()
+
 	return nil
+}
+
+// migrateOldConfigKeys provides backwards compatibility for old config key names
+// TODO: Remove this in a future major version
+func migrateOldConfigKeys() {
+	if v == nil {
+		return
+	}
+
+	// Migrate "json" -> "json-output"
+	if v.IsSet("json") && !v.IsSet("json-output") {
+		v.Set("json-output", v.Get("json"))
+	}
+
+	// Migrate "issue_prefix" -> "issue-prefix" (underscore to hyphen)
+	if v.IsSet("issue_prefix") && !v.IsSet("issue-prefix") {
+		v.Set("issue-prefix", v.Get("issue_prefix"))
+	}
 }
 
 // GetString retrieves a string configuration value
@@ -212,7 +234,7 @@ func WriteConfig() error {
 
 	// Only write values that differ from defaults or were explicitly set
 	// List of keys that should be persisted to config file
-	persistKeys := []string{"backend", "issue_prefix", "no-db", "actor"}
+	persistKeys := []string{"backend", "issue-prefix", "no-db", "actor"}
 
 	for _, key := range persistKeys {
 		if v.IsSet(key) {
@@ -236,7 +258,7 @@ func WriteConfig() error {
 // isDefaultValue checks if a value is the default for a given key
 func isDefaultValue(key string, val interface{}) bool {
 	defaults := map[string]interface{}{
-		"json":               false,
+		"json-output":        false,
 		"no-daemon":          false,
 		"no-auto-flush":      false,
 		"no-auto-import":     false,
@@ -245,7 +267,7 @@ func isDefaultValue(key string, val interface{}) bool {
 		"db":                 "",
 		"actor":              "",
 		"backend":            "sqlite",
-		"issue_prefix":       "",
+		"issue-prefix":       "",
 		"flush-debounce":     "5s",
 		"auto-start-daemon":  true,
 	}
