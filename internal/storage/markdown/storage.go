@@ -738,8 +738,8 @@ func (m *MarkdownStorage) RecordEvent(ctx context.Context, event *types.Event) e
 	eventsPath := filepath.Join(m.rootDir, "events", event.IssueID+".jsonl")
 
 	// Set timestamp if not set
-	if event.Timestamp.IsZero() {
-		event.Timestamp = time.Now()
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
 	}
 
 	// Marshal event to JSON

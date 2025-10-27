@@ -203,10 +203,13 @@ func TestMarkdownStorage_DeleteIssue(t *testing.T) {
 		t.Errorf("Issue file still exists after deletion")
 	}
 
-	// Try to get the deleted issue
-	_, err = store.GetIssue(ctx, "test-3")
-	if err == nil {
-		t.Error("Expected error when getting deleted issue, got nil")
+	// Try to get the deleted issue - should return (nil, nil) like SQLite
+	deletedIssue, err := store.GetIssue(ctx, "test-3")
+	if err != nil {
+		t.Errorf("Expected no error when getting deleted issue, got: %v", err)
+	}
+	if deletedIssue != nil {
+		t.Error("Expected nil issue when getting deleted issue, got non-nil")
 	}
 }
 
