@@ -110,16 +110,33 @@ func loadIssuesFromJSONL(path string) ([]*types.Issue, error) {
 
 // detectPrefix detects the issue prefix to use in --no-db mode
 // Priority:
-// 1. .beads/nodb_prefix.txt file (if exists)
+// 1. .beads/config.yaml (global config: issue-prefix key)
 // 2. Common prefix from existing issues (if all share same prefix)
 // 3. Current directory name (fallback)
 func detectPrefix(beadsDir string, memStore *memory.MemoryStorage) (string, error) {
-	// Check for nodb_prefix.txt
-	prefixFile := filepath.Join(beadsDir, "nodb_prefix.txt")
-	if data, err := os.ReadFile(prefixFile); err == nil {
-		prefix := strings.TrimSpace(string(data))
-		if prefix != "" {
-			return prefix, nil
+	// Check global config.yaml for issue-prefix
+	configPath := filepath.Join(beadsDir, "config.yaml")
+	if data, err := os.ReadFile(configPath); err == nil {
+		// Parse YAML to extract issue-prefix
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			// Skip comments and empty lines
+			if strings.HasPrefix(line, "#") || line == "" {
+				continue
+			}
+			// Look for issue-prefix or issue_prefix
+			if strings.HasPrefix(line, "issue-prefix:") || strings.HasPrefix(line, "issue_prefix:") {
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) == 2 {
+					prefix := strings.TrimSpace(parts[1])
+					// Remove quotes if present
+					prefix = strings.Trim(prefix, "\"'")
+					if prefix != "" {
+						return prefix, nil
+					}
+				}
+			}
 		}
 	}
 
@@ -144,7 +161,7 @@ func detectPrefix(beadsDir string, memStore *memory.MemoryStorage) (string, erro
 
 		// If issues have mixed prefixes, we can't auto-detect
 		if !allSame {
-			return "", fmt.Errorf("issues have mixed prefixes, please create .beads/nodb_prefix.txt with the desired prefix")
+			return "", fmt.Errorf("issues have mixed prefixes, please set 'issue-prefix' in .beads/config.yaml")
 		}
 	}
 

@@ -20,7 +20,7 @@ var initCmd = &cobra.Command{
 	Long: `Initialize bd in the current directory by creating a .beads/ directory
 and database file. Optionally specify a custom issue prefix.
 
-With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLite database.`,
+With --no-db: creates .beads/ directory and config.yaml file instead of SQLite database.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		prefix, _ := cmd.Flags().GetString("prefix")
 		quiet, _ := cmd.Flags().GetBool("quiet")
@@ -90,11 +90,20 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 			os.Exit(1)
 		}
 
-		// Handle --no-db mode: create nodb_prefix.txt instead of database
+		// Handle --no-db mode: create config.yaml instead of database
 		if noDb {
-			prefixFile := filepath.Join(localBeadsDir, "nodb_prefix.txt")
-			if err := os.WriteFile(prefixFile, []byte(prefix+"\n"), 0644); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: failed to write prefix file: %v\n", err)
+			// Create config.yaml with issue-prefix and no-db settings
+			configPath := filepath.Join(localBeadsDir, "config.yaml")
+			configContent := fmt.Sprintf(`# Beads Configuration File
+# Use no-db mode: load from JSONL, no SQLite, write back after each command
+no-db: true
+
+# Issue prefix for this repository
+issue-prefix: %s
+`, prefix)
+
+			if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: failed to write config.yaml: %v\n", err)
 				os.Exit(1)
 			}
 
@@ -113,6 +122,7 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 
 				fmt.Printf("\n%s bd initialized successfully in --no-db mode!\n\n", green("✓"))
 				fmt.Printf("  Mode: %s\n", cyan("no-db (JSONL-only)"))
+				fmt.Printf("  Config: %s\n", cyan(configPath))
 				fmt.Printf("  Issues file: %s\n", cyan(jsonlPath))
 				fmt.Printf("  Issue prefix: %s\n", cyan(prefix))
 				fmt.Printf("  Issues will be named: %s\n\n", cyan(prefix+"-1, "+prefix+"-2, ..."))
