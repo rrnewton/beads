@@ -621,111 +621,28 @@ func (m *MarkdownStorage) SetMetadata(ctx context.Context, key, value string) er
 
 // Counter operations
 func (m *MarkdownStorage) IncrementCounter(ctx context.Context, prefix string) (int, error) {
-	countersPath := filepath.Join(m.rootDir, "counters.yaml")
-
-	// Lock to prevent concurrent updates
+	// Lock to prevent concurrent ID generation
 	m.locksMu.Lock()
 	defer m.locksMu.Unlock()
 
-	// Read current counters
-	var counters map[string]int
-	data, err := os.ReadFile(countersPath)
-	if err != nil && !os.IsNotExist(err) {
-		return 0, fmt.Errorf("failed to read counters: %w", err)
-	}
-
-	if len(data) > 0 {
-		if err := yaml.Unmarshal(data, &counters); err != nil {
-			return 0, fmt.Errorf("failed to parse counters: %w", err)
-		}
-	} else {
-		counters = make(map[string]int)
-	}
-
-	// Increment counter
-	counters[prefix]++
-	newValue := counters[prefix]
-
-	// Write back
-	newData, err := yaml.Marshal(counters)
+	// Scan all markdown files to find the maximum ID for this prefix
+	maxID, err := m.getMaxIDForPrefix(prefix)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal counters: %w", err)
+		return 0, fmt.Errorf("failed to scan files for max ID: %w", err)
 	}
 
-	if err := os.WriteFile(countersPath, newData, 0644); err != nil {
-		return 0, fmt.Errorf("failed to write counters: %w", err)
-	}
-
-	return newValue, nil
+	// Return next ID
+	return maxID + 1, nil
 }
 
-func (m *MarkdownStorage) GetCounter(ctx context.Context, prefix string) (int, error) {
-	countersPath := filepath.Join(m.rootDir, "counters.yaml")
-
-	data, err := os.ReadFile(countersPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("failed to read counters: %w", err)
-	}
-
-	var counters map[string]int
-	if err := yaml.Unmarshal(data, &counters); err != nil {
-		return 0, fmt.Errorf("failed to parse counters: %w", err)
-	}
-
-	return counters[prefix], nil
-}
-
-func (m *MarkdownStorage) RenameCounterPrefix(ctx context.Context, oldPrefix, newPrefix string) error {
-	countersPath := filepath.Join(m.rootDir, "counters.yaml")
-
-	m.locksMu.Lock()
-	defer m.locksMu.Unlock()
-
-	var counters map[string]int
-	data, err := os.ReadFile(countersPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to read counters: %w", err)
-	}
-
-	if len(data) > 0 {
-		if err := yaml.Unmarshal(data, &counters); err != nil {
-			return fmt.Errorf("failed to parse counters: %w", err)
-		}
-	} else {
-		counters = make(map[string]int)
-	}
-
-	// Rename counter
-	if value, exists := counters[oldPrefix]; exists {
-		counters[newPrefix] = value
-		delete(counters, oldPrefix)
-
-		// Write back
-		newData, err := yaml.Marshal(counters)
-		if err != nil {
-			return fmt.Errorf("failed to marshal counters: %w", err)
-		}
-
-		if err := os.WriteFile(countersPath, newData, 0644); err != nil {
-			return fmt.Errorf("failed to write counters: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error {
-	// For markdown backend, scan all issues and update counters
+// getMaxIDForPrefix scans all issue files and returns the maximum ID number for a given prefix
+func (m *MarkdownStorage) getMaxIDForPrefix(prefix string) (int, error) {
 	entries, err := os.ReadDir(m.issuesDir)
 	if err != nil {
-		return fmt.Errorf("failed to read issues directory: %w", err)
+		return 0, fmt.Errorf("failed to read issues directory: %w", err)
 	}
 
-	counters := make(map[string]int)
-
+	maxID := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !hasSuffix(entry.Name(), ".md") {
 			continue
@@ -736,32 +653,40 @@ func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error {
 			continue
 		}
 
-		// Extract issue ID from filename
+		// Extract issue ID from filename (remove .md extension)
 		issueID := entry.Name()[:len(entry.Name())-3]
 
 		// Parse prefix and number
 		parts := strings.Split(issueID, "-")
 		if len(parts) >= 2 {
-			prefix := strings.Join(parts[:len(parts)-1], "-")
-			if num, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
-				if num > counters[prefix] {
-					counters[prefix] = num
+			filePrefix := strings.Join(parts[:len(parts)-1], "-")
+			if filePrefix == prefix {
+				if num, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+					if num > maxID {
+						maxID = num
+					}
 				}
 			}
 		}
 	}
 
-	// Write counters
-	countersPath := filepath.Join(m.rootDir, "counters.yaml")
-	data, err := yaml.Marshal(counters)
-	if err != nil {
-		return fmt.Errorf("failed to marshal counters: %w", err)
-	}
+	return maxID, nil
+}
 
-	if err := os.WriteFile(countersPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write counters: %w", err)
-	}
+func (m *MarkdownStorage) GetCounter(ctx context.Context, prefix string) (int, error) {
+	// Scan files to get the current max ID for this prefix
+	return m.getMaxIDForPrefix(prefix)
+}
 
+func (m *MarkdownStorage) RenameCounterPrefix(ctx context.Context, oldPrefix, newPrefix string) error {
+	// For markdown backend, counters are derived from filenames
+	// No separate counter state to update
+	return nil
+}
+
+func (m *MarkdownStorage) SyncAllCounters(ctx context.Context) error {
+	// For markdown backend, counters are always in sync with files
+	// No separate counter state to synchronize
 	return nil
 }
 

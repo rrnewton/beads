@@ -563,12 +563,9 @@ func openStorage(dbPath string) (storage.Storage, error) {
 		ctx := context.Background()
 		if _, err := getIssuePrefix(ctx, store); err != nil {
 			// Backend config doesn't have prefix, check global config
-			globalPrefix := config.GetString("prefix") // Try new key first
-			if globalPrefix == "" {
-				globalPrefix = config.GetString("issue-prefix") // Fallback to old key
-			}
+			globalPrefix := config.GetString("issue-prefix")
 			if globalPrefix != "" {
-				// Copy prefix from global config to backend config using standardized key
+				// Copy prefix from global config to backend config
 				_ = setIssuePrefix(ctx, store, globalPrefix)
 			}
 		}
@@ -581,15 +578,10 @@ func openStorage(dbPath string) (storage.Storage, error) {
 	}
 }
 
-// getIssuePrefix gets the issue prefix with backward compatibility
-// Tries: prefix, issue_prefix, issue-prefix (from global config)
+// getIssuePrefix gets the issue prefix
+// Checks backend storage first (issue_prefix), then global config (issue-prefix)
 func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) {
-	// Try new standardized key first
-	if prefix, err := store.GetConfig(ctx, "prefix"); err == nil && prefix != "" {
-		return prefix, nil
-	}
-
-	// Try old backend key
+	// Try backend storage config
 	if prefix, err := store.GetConfig(ctx, "issue_prefix"); err == nil && prefix != "" {
 		return prefix, nil
 	}
@@ -599,17 +591,12 @@ func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) 
 		return prefix, nil
 	}
 
-	// Try global config with new key
-	if prefix := config.GetString("prefix"); prefix != "" {
-		return prefix, nil
-	}
-
 	return "", fmt.Errorf("prefix not configured")
 }
 
 // setIssuePrefix sets the issue prefix using the standardized key
 func setIssuePrefix(ctx context.Context, store storage.Storage, prefix string) error {
-	return store.SetConfig(ctx, "prefix", prefix)
+	return store.SetConfig(ctx, "issue_prefix", prefix)
 }
 
 // detectBackend determines which storage backend to use
