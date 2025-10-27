@@ -67,18 +67,19 @@ func Initialize() error {
 	v.AutomaticEnv()
 
 	// Set defaults for all flags
-	v.SetDefault("json", false)
+	v.SetDefault("json-output", false)
 	v.SetDefault("no-daemon", false)
 	v.SetDefault("no-auto-flush", false)
 	v.SetDefault("no-auto-import", false)
 	v.SetDefault("db", "")
 	v.SetDefault("actor", "")
-	
+	v.SetDefault("issue-prefix", "issue")
+
 	// Additional environment variables (not prefixed with BD_)
 	// These are bound explicitly for backward compatibility
 	_ = v.BindEnv("flush-debounce", "BEADS_FLUSH_DEBOUNCE")
 	_ = v.BindEnv("auto-start-daemon", "BEADS_AUTO_START_DAEMON")
-	
+
 	// Set defaults for additional settings
 	v.SetDefault("flush-debounce", "30s")
 	v.SetDefault("auto-start-daemon", true)

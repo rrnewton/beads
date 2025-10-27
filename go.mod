@@ -13,6 +13,7 @@ require (
 	golang.org/x/mod v0.29.0
 	golang.org/x/sys v0.36.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.38.2
 	rsc.io/script v0.0.2
 )
