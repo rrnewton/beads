@@ -769,6 +769,18 @@ func (m *MemoryStorage) GetDirtyIssueHash(ctx context.Context, issueID string) (
 	return "", nil
 }
 
+// GetExportHash returns empty string for memory storage (no persistent export hash tracking)
+func (m *MemoryStorage) GetExportHash(ctx context.Context, issueID string) (string, error) {
+	// Memory storage doesn't track export hashes - export tracking is not needed
+	return "", nil
+}
+
+// SetExportHash is a no-op for memory storage (no persistent export hash tracking)
+func (m *MemoryStorage) SetExportHash(ctx context.Context, issueID, contentHash string) error {
+	// Memory storage doesn't track export hashes - no-op
+	return nil
+}
+
 func (m *MemoryStorage) ClearDirtyIssues(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
