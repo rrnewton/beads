@@ -2,13 +2,9 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
-	"gopkg.in/yaml.v3"
 )
 
 func TestConfigCommands(t *testing.T) {

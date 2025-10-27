@@ -134,14 +134,14 @@ func TestRenamePrefixCommand(t *testing.T) {
 	}
 
 	// Verify prefix was updated in global config
-	configData, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("Failed to read config.yaml: %v", err)
+	configBytes, err2 := os.ReadFile(configPath)
+	if err2 != nil {
+		t.Fatalf("Failed to read config.yaml: %v", err2)
 	}
 
 	var cfg map[string]interface{}
-	if err := yaml.Unmarshal(configData, &cfg); err != nil {
-		t.Fatalf("Failed to parse config.yaml: %v", err)
+	if err2 = yaml.Unmarshal(configBytes, &cfg); err2 != nil {
+		t.Fatalf("Failed to parse config.yaml: %v", err2)
 	}
 
 	newPrefix, ok := cfg["issue_prefix"].(string)
