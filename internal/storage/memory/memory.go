@@ -763,6 +763,12 @@ func (m *MemoryStorage) GetDirtyIssues(ctx context.Context) ([]string, error) {
 	return dirtyIDs, nil
 }
 
+// GetDirtyIssueHash returns empty string for memory storage (no persistent hash tracking)
+func (m *MemoryStorage) GetDirtyIssueHash(ctx context.Context, issueID string) (string, error) {
+	// Memory storage doesn't track content hashes - always export dirty issues
+	return "", nil
+}
+
 func (m *MemoryStorage) ClearDirtyIssues(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
