@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/steveyegge/beads/internal/storage/sqlite"
@@ -148,32 +146,8 @@ func TestConfigNamespaces(t *testing.T) {
 	}
 }
 
-// setupTestDB creates a temporary test database
+// setupTestDB creates a temporary test database with global config
 func setupTestDB(t *testing.T) (*sqlite.SQLiteStorage, func()) {
-	tmpDir, err := os.MkdirTemp("", "bd-test-config-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	testDB := filepath.Join(tmpDir, "test.db")
-	store, err := sqlite.New(testDB)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		store.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
-
-	cleanup := func() {
-		store.Close()
-		os.RemoveAll(tmpDir)
-	}
-
+	store, _, cleanup := setupTestStore(t, "test")
 	return store, cleanup
 }

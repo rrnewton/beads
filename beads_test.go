@@ -129,32 +129,6 @@ func TestFindDatabasePathNotFound(t *testing.T) {
 	_ = result
 }
 
-func TestFindJSONLPathWithExistingFile(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "beads-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a .jsonl file
-	jsonlPath := filepath.Join(tmpDir, "custom.jsonl")
-	f, err := os.Create(jsonlPath)
-	if err != nil {
-		t.Fatalf("Failed to create jsonl file: %v", err)
-	}
-	f.Close()
-
-	// Create a fake database path in the same directory
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Should find the existing .jsonl file
-	result := FindJSONLPath(dbPath)
-	if result != jsonlPath {
-		t.Errorf("Expected '%s', got '%s'", jsonlPath, result)
-	}
-}
-
 func TestFindJSONLPathDefault(t *testing.T) {
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "beads-test-*")
@@ -179,42 +153,6 @@ func TestFindJSONLPathEmpty(t *testing.T) {
 	result := FindJSONLPath("")
 	if result != "" {
 		t.Errorf("Expected empty string for empty db path, got '%s'", result)
-	}
-}
-
-func TestFindJSONLPathMultipleFiles(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "beads-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create multiple .jsonl files
-	jsonlFiles := []string{"issues.jsonl", "backup.jsonl", "archive.jsonl"}
-	for _, filename := range jsonlFiles {
-		f, err := os.Create(filepath.Join(tmpDir, filename))
-		if err != nil {
-			t.Fatalf("Failed to create jsonl file: %v", err)
-		}
-		f.Close()
-	}
-
-	// Create a fake database path
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Should return the first .jsonl file found (lexicographically sorted by Glob)
-	result := FindJSONLPath(dbPath)
-	// Verify it's one of the .jsonl files we created
-	found := false
-	for _, filename := range jsonlFiles {
-		if result == filepath.Join(tmpDir, filename) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("Expected one of the created .jsonl files, got '%s'", result)
 	}
 }
 

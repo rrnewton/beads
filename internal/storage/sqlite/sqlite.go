@@ -13,6 +13,7 @@ import (
 	"time"
 
 	// Import SQLite driver
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 	_ "modernc.org/sqlite"
 )
@@ -619,15 +620,12 @@ func (s *SQLiteStorage) CreateIssue(ctx context.Context, issue *types.Issue, act
 
 	// Generate ID if not set (inside transaction to prevent race conditions)
 	if issue.ID == "" {
-		// Get prefix from config
-		var prefix string
-		err := conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-		if err == sql.ErrNoRows || prefix == "" {
+		// Get prefix from global config (.beads/config.yaml)
+		prefix := config.GetString("issue-prefix")
+		if prefix == "" {
 			// CRITICAL: Reject operation if issue_prefix config is missing (bd-166)
 			// This prevents duplicate issues with wrong prefix
-			return fmt.Errorf("database not initialized: issue_prefix config is missing (run 'bd init --prefix <prefix>' first)")
-		} else if err != nil {
-			return fmt.Errorf("failed to get config: %w", err)
+			return fmt.Errorf("database not initialized: issue-prefix config is missing (run 'bd init --prefix <prefix>' first)")
 		}
 
 		// Atomically initialize counter (if needed) and get next ID (within transaction)
@@ -755,19 +753,16 @@ func generateBatchIDs(ctx context.Context, conn *sql.Conn, issues []*types.Issue
 		return nil
 	}
 
-	// Get prefix from config
-	var prefix string
-	err := conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-	if err == sql.ErrNoRows || prefix == "" {
+	// Get prefix from global config (.beads/config.yaml)
+	prefix := config.GetString("issue-prefix")
+	if prefix == "" {
 		// CRITICAL: Reject operation if issue_prefix config is missing (bd-166)
-		return fmt.Errorf("database not initialized: issue_prefix config is missing (run 'bd init --prefix <prefix>' first)")
-	} else if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
+		return fmt.Errorf("database not initialized: issue-prefix config is missing (run 'bd init --prefix <prefix>' first)")
 	}
 
 	// Atomically reserve ID range
 	var nextID int
-	err = conn.QueryRowContext(ctx, `
+	err := conn.QueryRowContext(ctx, `
 		INSERT INTO issue_counters (prefix, last_id)
 		SELECT ?, COALESCE(MAX(CAST(substr(id, LENGTH(?) + 2) AS INTEGER)), 0) + ?
 		FROM issues

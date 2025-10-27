@@ -23,9 +23,12 @@ import (
 	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/markdown"
+	"github.com/steveyegge/beads/internal/storage/memory"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"golang.org/x/mod/semver"
+	"gopkg.in/yaml.v3"
 )
 
 // DaemonStatus captures daemon connection state for the current command
@@ -93,7 +96,7 @@ var rootCmd = &cobra.Command{
 
 		// If flag wasn't explicitly set, use viper value
 		if !cmd.Flags().Changed("json") {
-			jsonOutput = config.GetBool("json")
+			jsonOutput = config.GetBool("json-output")
 		}
 		if !cmd.Flags().Changed("no-daemon") {
 			noDaemon = config.GetBool("no-daemon")
@@ -103,6 +106,12 @@ var rootCmd = &cobra.Command{
 		}
 		if !cmd.Flags().Changed("no-auto-import") {
 			noAutoImport = config.GetBool("no-auto-import")
+		}
+		if !cmd.Flags().Changed("no-db") {
+			noDb = config.GetBool("no-db")
+		}
+		if !cmd.Flags().Changed("no-json") {
+			noJson = config.GetBool("no-json")
 		}
 		if !cmd.Flags().Changed("db") && dbPath == "" {
 			dbPath = config.GetString("db")
@@ -116,6 +125,13 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
+		// Validate that no-db and no-json can't both be true
+		if noDb && noJson {
+			fmt.Fprintf(os.Stderr, "Error: --no-db and --no-json cannot both be enabled\n")
+			fmt.Fprintf(os.Stderr, "The data needs to be stored somewhere (either in the database or in JSONL)\n")
+			os.Exit(1)
+		}
+
 		// If sandbox mode is set, enable all sandbox flags
 		if sandboxMode {
 			noDaemon = true
@@ -126,11 +142,33 @@ var rootCmd = &cobra.Command{
 		// Sync RPC client version with CLI version
 		rpc.ClientVersion = Version
 
-		// Set auto-flush based on flag (invert no-auto-flush)
-		autoFlushEnabled = !noAutoFlush
+		// Set auto-flush based on flags (invert no-auto-flush, or disable if no-json)
+		autoFlushEnabled = !noAutoFlush && !noJson
 
-		// Set auto-import based on flag (invert no-auto-import)
-		autoImportEnabled = !noAutoImport
+		// Set auto-import based on flags (invert no-auto-import, or disable if no-json)
+		autoImportEnabled = !noAutoImport && !noJson
+
+		// Handle --no-db mode: load from JSONL, use in-memory storage
+		if noDb {
+			if err := initializeNoDbMode(); err != nil {
+				fmt.Fprintf(os.Stderr, "Error initializing --no-db mode: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Set actor for audit trail
+			if actor == "" {
+				if bdActor := os.Getenv("BD_ACTOR"); bdActor != "" {
+					actor = bdActor
+				} else if user := os.Getenv("USER"); user != "" {
+					actor = user
+				} else {
+					actor = "unknown"
+				}
+			}
+
+			// Skip daemon and SQLite initialization - we're in memory mode
+			return
+		}
 
 		// Initialize database path
 		if dbPath == "" {
@@ -211,6 +249,42 @@ var rootCmd = &cobra.Command{
 			SocketPath:       socketPath,
 			AutoStartEnabled: shouldAutoStartDaemon(),
 			FallbackReason:   FallbackNone,
+		}
+
+		// Skip daemon mode for markdown backend (daemon doesn't support it yet)
+		backend := detectBackend(dbPath)
+		if backend == "markdown" {
+			// Validate that auto-start-daemon is not explicitly enabled with markdown backend
+			// Check if auto-start-daemon is set via env var (BEADS_AUTO_START_DAEMON)
+			if autoStartEnv := os.Getenv("BEADS_AUTO_START_DAEMON"); autoStartEnv == "true" || autoStartEnv == "1" {
+				fmt.Fprintf(os.Stderr, "Error: BEADS_AUTO_START_DAEMON=true is not supported with backend=markdown\n")
+				fmt.Fprintf(os.Stderr, "The markdown backend does not support daemon mode.\n")
+				fmt.Fprintf(os.Stderr, "Unset BEADS_AUTO_START_DAEMON or set it to false.\n")
+				os.Exit(1)
+			}
+
+			// Check if auto-start-daemon is explicitly in config file
+			// Read config file directly to check (viper.IsSet includes defaults)
+			configFile := config.FileUsed()
+			if configFile != "" {
+				if data, err := os.ReadFile(configFile); err == nil {
+					var cfg map[string]interface{}
+					if err := yaml.Unmarshal(data, &cfg); err == nil {
+						if autoStart, ok := cfg["auto-start-daemon"].(bool); ok && autoStart {
+							fmt.Fprintf(os.Stderr, "Error: auto-start-daemon=true is not supported with backend=markdown\n")
+							fmt.Fprintf(os.Stderr, "The markdown backend does not support daemon mode.\n")
+							fmt.Fprintf(os.Stderr, "Set auto-start-daemon=false in %s or remove the setting.\n", configFile)
+							os.Exit(1)
+						}
+					}
+				}
+			}
+
+			noDaemon = true
+			daemonStatus.FallbackReason = FallbackDaemonUnsupported
+			if os.Getenv("BD_DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "Debug: markdown backend doesn't support daemon mode, using direct mode\n")
+			}
 		}
 
 		// Try to connect to daemon first (unless --no-daemon flag is set)
@@ -412,9 +486,9 @@ var rootCmd = &cobra.Command{
 
 		// Fall back to direct storage access
 		var err error
-		store, err = sqlite.New(dbPath)
+		store, err = openStorage(dbPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to open database: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error: failed to open storage: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -436,6 +510,26 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		// Handle --no-db mode: write memory storage back to JSONL
+		if noDb {
+			if store != nil {
+				cwd, err := os.Getwd()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: failed to get current directory: %v\n", err)
+					os.Exit(1)
+				}
+
+				beadsDir := filepath.Join(cwd, ".beads")
+				if memStore, ok := store.(*memory.MemoryStorage); ok {
+					if err := writeIssuesToJSONL(memStore, beadsDir); err != nil {
+						fmt.Fprintf(os.Stderr, "Error: failed to write JSONL: %v\n", err)
+						os.Exit(1)
+					}
+				}
+			}
+			return
+		}
+
 		// Close daemon client if we're using it
 		if daemonClient != nil {
 			_ = daemonClient.Close()
@@ -470,6 +564,83 @@ var rootCmd = &cobra.Command{
 			_ = store.Close()
 		}
 	},
+}
+
+// openStorage opens the appropriate storage backend based on configuration
+func openStorage(dbPath string) (storage.Storage, error) {
+	// Determine backend from config
+	backend := detectBackend(dbPath)
+
+	// Open the appropriate backend
+	switch backend {
+	case "markdown":
+		// For markdown backend, dbPath should point to markdown_db directory
+		// If dbPath points to a .db file (sqlite path), convert it to markdown_db directory
+		markdownPath := dbPath
+		if strings.HasSuffix(dbPath, ".db") && !strings.HasSuffix(dbPath, "markdown_db") {
+			// dbPath is a SQLite file path like .beads/prefix.db
+			// Convert to .beads/markdown_db directory
+			beadsDir := filepath.Dir(dbPath)
+			markdownPath = filepath.Join(beadsDir, "markdown_db")
+		}
+		store, err := markdown.New(markdownPath)
+		if err != nil {
+			return nil, err
+		}
+
+		return store, nil
+	case "sqlite":
+		return sqlite.New(dbPath)
+	default:
+		return sqlite.New(dbPath)
+	}
+}
+
+// getIssuePrefix gets the issue prefix from global config (.beads/config.yaml)
+func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) {
+	// Read from global config only - single source of truth
+	prefix := config.GetString("issue-prefix")
+	if prefix == "" {
+		return "", fmt.Errorf("prefix not configured in .beads/config.yaml")
+	}
+	return prefix, nil
+}
+
+// updateIssuePrefix updates the issue prefix in global config (.beads/config.yaml)
+func updateIssuePrefix(newPrefix string) error {
+	config.Set("issue-prefix", newPrefix)
+	return config.WriteConfig()
+}
+
+// detectBackend determines which storage backend to use
+func detectBackend(dbPath string) string {
+	// First check config from viper (which reads .beads/config.yaml)
+	backend := config.GetString("backend")
+	if backend != "" {
+		return backend
+	}
+
+	// Try to detect from path
+	if strings.Contains(dbPath, "markdown_db") {
+		return "markdown"
+	}
+
+	// Check if .beads/config.yaml exists and read it directly
+	cwd, err := os.Getwd()
+	if err == nil {
+		configPath := filepath.Join(cwd, ".beads", "config.yaml")
+		if data, err := os.ReadFile(configPath); err == nil {
+			var cfg map[string]interface{}
+			if err := yaml.Unmarshal(data, &cfg); err == nil {
+				if b, ok := cfg["backend"].(string); ok {
+					return b
+				}
+			}
+		}
+	}
+
+	// Default to sqlite
+	return "sqlite"
 }
 
 // getDebounceDuration returns the auto-flush debounce duration
@@ -509,6 +680,12 @@ func shouldAutoStartDaemon() bool {
 	noDaemon := strings.ToLower(strings.TrimSpace(os.Getenv("BEADS_NO_DAEMON")))
 	if noDaemon == "1" || noDaemon == "true" || noDaemon == "yes" || noDaemon == "on" {
 		return false // Explicit opt-out
+	}
+
+	// Disable daemon for markdown backend (no benefit from in-memory caching)
+	// Markdown backend must validate disk state on each operation due to external edits
+	if config.GetString("backend") == "markdown" {
+		return false
 	}
 
 	// Use viper to read from config file or BEADS_AUTO_START_DAEMON env var
@@ -1125,6 +1302,71 @@ func clearAutoFlushState() {
 	lastFlushError = nil
 }
 
+// writeJSONLAtomic writes issues to a JSONL file atomically using temp file + rename.
+// This is the common implementation used by both flushToJSONL (SQLite mode) and
+// writeIssuesToJSONL (--no-db mode).
+//
+// Atomic write pattern:
+//  1. Create temp file with PID suffix: issues.jsonl.tmp.12345
+//  2. Write all issues as JSONL to temp file
+//  3. Close temp file
+//  4. Atomic rename: temp → target
+//  5. Set file permissions to 0644
+//
+// Error handling: Returns error on any failure. Cleanup is guaranteed via defer.
+// Thread-safe: No shared state access. Safe to call from multiple goroutines.
+func writeJSONLAtomic(jsonlPath string, issues []*types.Issue) error {
+	// Sort issues by ID for consistent output
+	sort.Slice(issues, func(i, j int) bool {
+		return issues[i].ID < issues[j].ID
+	})
+
+	// Create temp file with PID suffix to avoid collisions (bd-306)
+	tempPath := fmt.Sprintf("%s.tmp.%d", jsonlPath, os.Getpid())
+	f, err := os.Create(tempPath)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	// Ensure cleanup on failure
+	defer func() {
+		if f != nil {
+			_ = f.Close()
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	// Write all issues as JSONL
+	encoder := json.NewEncoder(f)
+	for _, issue := range issues {
+		if err := encoder.Encode(issue); err != nil {
+			return fmt.Errorf("failed to encode issue %s: %w", issue.ID, err)
+		}
+	}
+
+	// Close temp file before renaming
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+	f = nil // Prevent defer cleanup
+
+	// Atomic rename
+	if err := os.Rename(tempPath, jsonlPath); err != nil {
+		_ = os.Remove(tempPath) // Clean up on rename failure
+		return fmt.Errorf("failed to rename file: %w", err)
+	}
+
+	// Set appropriate file permissions (0644: rw-r--r--)
+	if err := os.Chmod(jsonlPath, 0644); err != nil {
+		// Non-fatal - file is already written
+		if os.Getenv("BD_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "Debug: failed to set file permissions: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
 // flushToJSONL exports dirty issues to JSONL using incremental updates
 // flushToJSONL exports dirty database changes to the JSONL file. Uses incremental
 // export by default (only exports modified issues), or full export for ID-changing
@@ -1286,45 +1528,15 @@ func flushToJSONL() {
 		issueMap[issueID] = issue
 	}
 
-	// Convert map to sorted slice
+	// Convert map to slice (will be sorted by writeJSONLAtomic)
 	issues := make([]*types.Issue, 0, len(issueMap))
 	for _, issue := range issueMap {
 		issues = append(issues, issue)
 	}
-	sort.Slice(issues, func(i, j int) bool {
-		return issues[i].ID < issues[j].ID
-	})
 
-	// Write to temp file first, then rename (atomic)
-	// Use PID in filename to avoid collisions between concurrent bd commands (bd-306)
-	tempPath := fmt.Sprintf("%s.tmp.%d", jsonlPath, os.Getpid())
-	// #nosec G304 - controlled path from config
-	f, err := os.Create(tempPath)
-	if err != nil {
-		recordFailure(fmt.Errorf("failed to create temp file: %w", err))
-		return
-	}
-
-	encoder := json.NewEncoder(f)
-	for _, issue := range issues {
-		if err := encoder.Encode(issue); err != nil {
-			_ = f.Close()
-			_ = os.Remove(tempPath)
-			recordFailure(fmt.Errorf("failed to encode issue %s: %w", issue.ID, err))
-			return
-		}
-	}
-
-	if err := f.Close(); err != nil {
-		_ = os.Remove(tempPath)
-		recordFailure(fmt.Errorf("failed to close temp file: %w", err))
-		return
-	}
-
-	// Atomic rename
-	if err := os.Rename(tempPath, jsonlPath); err != nil {
-		_ = os.Remove(tempPath)
-		recordFailure(fmt.Errorf("failed to rename file: %w", err))
+	// Write atomically using common helper
+	if err := writeJSONLAtomic(jsonlPath, issues); err != nil {
+		recordFailure(err)
 		return
 	}
 
@@ -1354,6 +1566,8 @@ var (
 	noAutoFlush  bool
 	noAutoImport bool
 	sandboxMode  bool
+	noDb         bool // Use --no-db mode: load from JSONL, write back after each command
+	noJson       bool // Disable all JSON export/import (backend is source of truth)
 )
 
 func init() {
@@ -1369,6 +1583,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noAutoFlush, "no-auto-flush", false, "Disable automatic JSONL sync after CRUD operations")
 	rootCmd.PersistentFlags().BoolVar(&noAutoImport, "no-auto-import", false, "Disable automatic JSONL import when newer than DB")
 	rootCmd.PersistentFlags().BoolVar(&sandboxMode, "sandbox", false, "Sandbox mode: disables daemon and auto-sync (equivalent to --no-daemon --no-auto-flush --no-auto-import)")
+	rootCmd.PersistentFlags().BoolVar(&noDb, "no-db", false, "Use no-db mode: load from JSONL, no SQLite, write back after each command")
+	rootCmd.PersistentFlags().BoolVar(&noJson, "no-json", false, "Disable all JSON export/import (backend is source of truth)")
 }
 
 // createIssuesFromMarkdown parses a markdown file and creates multiple issues
@@ -1560,7 +1776,7 @@ var createCmd = &cobra.Command{
 					// For now, skip validation in daemon mode (needs RPC enhancement)
 				} else {
 					// Direct mode - check config
-					dbPrefix, _ = store.GetConfig(ctx, "issue_prefix")
+					dbPrefix, _ = getIssuePrefix(ctx, store)
 				}
 
 				if dbPrefix != "" && dbPrefix != requestedPrefix {
@@ -1720,7 +1936,7 @@ func init() {
 
 // resolveIssueID attempts to resolve an issue ID, with a fallback for bare numbers.
 // If the ID doesn't exist and is a bare number (no hyphen), it tries adding the
-// configured issue_prefix. Returns the issue and the resolved ID.
+// configured issue-prefix. Returns the issue and the resolved ID.
 func resolveIssueID(ctx context.Context, id string) (*types.Issue, string, error) {
 	// First try with the provided ID
 	issue, err := store.GetIssue(ctx, id)
@@ -1739,7 +1955,7 @@ func resolveIssueID(ctx context.Context, id string) (*types.Issue, string, error
 	}
 
 	// ID is a bare number - try with prefix
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
+	prefix, err := getIssuePrefix(ctx, store)
 	if err != nil || prefix == "" {
 		// No prefix configured, can't do fallback
 		return nil, id, nil
@@ -1977,16 +2193,16 @@ Examples:
 		// Direct mode
 		ctx := context.Background()
 		allDetails := []interface{}{}
-	for idx, id := range issueIDs {
-		 issue, resolvedID, err := resolveIssueID(ctx, id)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error fetching %s: %v\n", id, err)
-		  continue
-		}
-		if issue == nil {
-		 fmt.Fprintf(os.Stderr, "Issue %s not found\n", resolvedID)
-		continue
-		}
+		for idx, id := range args {
+			issue, resolvedID, err := resolveIssueID(ctx, id)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error fetching %s: %v\n", id, err)
+				continue
+			}
+			if issue == nil {
+				fmt.Fprintf(os.Stderr, "Issue %s not found\n", resolvedID)
+				continue
+			}
 
 			if jsonOutput {
 				// Include labels, dependencies, and comments in JSON output
@@ -2403,6 +2619,7 @@ Examples:
 
 		// Read the edited content
 		// #nosec G304 - controlled temp file path
+
 		editedContent, err := os.ReadFile(tmpPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading edited file: %v\n", err)

@@ -7,11 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
+	"gopkg.in/yaml.v3"
 	_ "modernc.org/sqlite"
 )
 
 func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
+	return setupTestDBWithPrefix(t, "test")
+}
+
+func setupTestDBWithPrefix(t *testing.T, prefix string) (*SQLiteStorage, func()) {
 	t.Helper()
 
 	// Create temporary directory
@@ -20,9 +26,41 @@ func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	dbPath := filepath.Join(tmpDir, "test.db")
+	// Create .beads directory and config.yaml
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0750); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	// Write config with specified prefix
+	configPath := filepath.Join(beadsDir, "config.yaml")
+	configData := map[string]interface{}{
+		"issue_prefix": prefix,
+		"backend":      "sqlite",
+	}
+	configBytes, _ := yaml.Marshal(configData)
+	if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("failed to write config.yaml: %v", err)
+	}
+
+	// Change to temp directory and initialize config
+	origWd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	if err := config.Initialize(); err != nil {
+		os.Chdir(origWd)
+		os.RemoveAll(tmpDir)
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
+	dbPath := filepath.Join(beadsDir, prefix+".db")
 	store, err := New(dbPath)
 	if err != nil {
+		os.Chdir(origWd)
 		os.RemoveAll(tmpDir)
 		t.Fatalf("failed to create storage: %v", err)
 	}
@@ -37,6 +75,7 @@ func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 
 	cleanup := func() {
 		store.Close()
+		os.Chdir(origWd)
 		os.RemoveAll(tmpDir)
 	}
 

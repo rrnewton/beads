@@ -74,6 +74,9 @@ func Initialize() error {
 	v.SetDefault("db", "")
 	v.SetDefault("actor", "")
 	v.SetDefault("issue-prefix", "issue")
+	v.SetDefault("backend", "sqlite")
+	v.SetDefault("no-db", false)
+	v.SetDefault("no-json", false)
 
 	// Additional environment variables (not prefixed with BD_)
 	// These are bound explicitly for backward compatibility

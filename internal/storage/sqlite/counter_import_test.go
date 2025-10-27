@@ -14,15 +14,12 @@ import (
 // - Import issues with lower IDs (e.g., bd-1 to bd-49)
 // - Verify counter syncs to actual max ID (49), not stuck at 4106
 func TestCounterSyncAfterImport(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Simulate "test pollution" scenario: manually set counter to high value
 	// This simulates having had many issues before that were deleted
@@ -92,15 +89,12 @@ func TestCounterSyncAfterImport(t *testing.T) {
 // TestCounterSyncWithoutExplicitSync verifies behavior when SyncAllCounters is NOT called
 // This shows the bug that would happen if import didn't call SyncAllCounters
 func TestCounterNotSyncedWithoutExplicitSync(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Manually set counter to high value (stale counter)
 	_, err := store.db.ExecContext(ctx, `

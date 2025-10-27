@@ -11,37 +11,34 @@ import (
 	"github.com/steveyegge/beads/internal/types"
 )
 
-// Phase 1: Get or create SQLite store for import
-func getOrCreateStore(_ context.Context, dbPath string, store storage.Storage) (*sqlite.SQLiteStorage, bool, error) {
-	var sqliteStore *sqlite.SQLiteStorage
+// Phase 1: Get or create store for import (supports any backend)
+func getOrCreateStore(_ context.Context, dbPath string, store storage.Storage) (storage.Storage, bool, error) {
+	var importStore storage.Storage
 	var needCloseStore bool
 
 	if store != nil {
-		// Direct mode - try to use existing store
-		var ok bool
-		sqliteStore, ok = store.(*sqlite.SQLiteStorage)
-		if !ok {
-			return nil, false, fmt.Errorf("import requires SQLite storage backend")
-		}
+		// Direct mode - use existing store (any backend)
+		importStore = store
 	} else {
 		// Daemon mode - open direct connection for import
 		if dbPath == "" {
 			return nil, false, fmt.Errorf("database path not set")
 		}
 		var err error
-		sqliteStore, err = sqlite.New(dbPath)
+		// Try to open as SQLite (for backward compatibility)
+		importStore, err = sqlite.New(dbPath)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to open database: %w", err)
 		}
 		needCloseStore = true
 	}
 
-	return sqliteStore, needCloseStore, nil
+	return importStore, needCloseStore, nil
 }
 
 // Phase 2: Check and handle prefix mismatches
-func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
-	configuredPrefix, err := sqliteStore.GetConfig(ctx, "issue_prefix")
+func handlePrefixMismatch(ctx context.Context, store storage.Storage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
+	configuredPrefix, err := getIssuePrefix(ctx, store)
 	if err != nil {
 		return fmt.Errorf("failed to get configured prefix: %w", err)
 	}
@@ -152,13 +149,13 @@ func handleCollisions(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, is
 }
 
 // Phase 4: Upsert issues (create new or update existing)
-func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
+func upsertIssues(ctx context.Context, store storage.Storage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
 	var newIssues []*types.Issue
 	seenNew := make(map[string]int) // Track duplicates within import batch
 
 	for _, issue := range issues {
 		// Check if issue exists in DB
-		existing, err := sqliteStore.GetIssue(ctx, issue.ID)
+		existing, err := store.GetIssue(ctx, issue.ID)
 		if err != nil {
 			return fmt.Errorf("error checking issue %s: %w", issue.ID, err)
 		}
@@ -195,7 +192,7 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 
 			// bd-88: Only update if data actually changed (prevents timestamp churn)
 			if issueDataChanged(existing, updates) {
-				if err := sqliteStore.UpdateIssue(ctx, issue.ID, updates, "import"); err != nil {
+				if err := store.UpdateIssue(ctx, issue.ID, updates, "import"); err != nil {
 					return fmt.Errorf("error updating issue %s: %w", issue.ID, err)
 				}
 				result.Updated++
@@ -219,15 +216,17 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 
 	// Batch create all new issues
 	if len(newIssues) > 0 {
-		if err := sqliteStore.CreateIssues(ctx, newIssues, "import"); err != nil {
+		if err := store.CreateIssues(ctx, newIssues, "import"); err != nil {
 			return fmt.Errorf("error creating issues: %w", err)
 		}
 		result.Created += len(newIssues)
 	}
 
-	// Sync counters after batch import
-	if err := sqliteStore.SyncAllCounters(ctx); err != nil {
-		return fmt.Errorf("error syncing counters: %w", err)
+	// Sync counters after batch import (SQLite-specific optimization)
+	if sqliteStore, ok := store.(*sqlite.SQLiteStorage); ok {
+		if err := sqliteStore.SyncAllCounters(ctx); err != nil {
+			return fmt.Errorf("error syncing counters: %w", err)
+		}
 	}
 
 	return nil

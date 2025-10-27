@@ -64,7 +64,7 @@ Risks:
 			ctx := context.Background()
 
 		// Get prefix from config, or derive from first issue if not set
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
+		prefix, err := getIssuePrefix(ctx, store)
 		if err != nil || prefix == "" {
 			// Get any issue to derive prefix
 			issues, err := store.SearchIssues(ctx, "", types.IssueFilter{})

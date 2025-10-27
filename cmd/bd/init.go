@@ -11,17 +11,33 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads"
 	"github.com/steveyegge/beads/internal/configfile"
+	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/markdown"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
+	"gopkg.in/yaml.v3"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize bd in the current directory",
 	Long: `Initialize bd in the current directory by creating a .beads/ directory
-and database file. Optionally specify a custom issue prefix.`,
+and database file. Optionally specify a custom issue prefix.
+
+Backend options (--backend):
+  sqlite:   SQLite database (default) - .beads/<prefix>.db
+  markdown: Human-readable markdown files - .beads/markdown_db/issues/*.md
+
+With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLite database.`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		prefix, _ := cmd.Flags().GetString("prefix")
 		quiet, _ := cmd.Flags().GetBool("quiet")
+		backend, _ := cmd.Flags().GetString("backend")
+
+		// Validate backend
+		if backend != "sqlite" && backend != "markdown" {
+			fmt.Fprintf(os.Stderr, "Error: invalid backend '%s'. Must be 'sqlite' or 'markdown'\n", backend)
+			os.Exit(1)
+		}
 
 		// Check BEADS_DB environment variable if --db flag not set
 		// (PersistentPreRun doesn't run for init command)
@@ -45,17 +61,25 @@ and database file. Optionally specify a custom issue prefix.`,
 		// The hyphen is added automatically during ID generation
 		prefix = strings.TrimRight(prefix, "-")
 
-		// Create database
-		// Use global dbPath if set via --db flag or BEADS_DB env var, otherwise default to .beads/beads.db
-		initDBPath := dbPath
-		if initDBPath == "" {
-		initDBPath = filepath.Join(".beads", beads.CanonicalDatabaseName)
+		// Determine storage path based on backend
+		var storePath string
+		if dbPath != "" {
+			storePath = dbPath
+		} else {
+			if backend == "markdown" {
+				storePath = filepath.Join(".beads", "markdown_db")
+			} else {
+				// Use canonical beads.db name for SQLite
+				storePath = filepath.Join(".beads", beads.CanonicalDatabaseName)
+			}
 		}
 
-		// Migrate old database files if they exist
-	if err := migrateOldDatabases(initDBPath, quiet); err != nil {
-		fmt.Fprintf(os.Stderr, "Error during database migration: %v\n", err)
-		os.Exit(1)
+		// Migrate old database files if they exist (only for SQLite backend)
+	if backend == "sqlite" {
+		if err := migrateOldDatabases(storePath, quiet); err != nil {
+			fmt.Fprintf(os.Stderr, "Error during database migration: %v\n", err)
+			os.Exit(1)
+		}
 	}
 	
 	// Determine if we should create .beads/ directory in CWD
@@ -67,19 +91,19 @@ and database file. Optionally specify a custom issue prefix.`,
 	}
 	
 	localBeadsDir := filepath.Join(cwd, ".beads")
-	initDBDir := filepath.Dir(initDBPath)
-	
+	storeDir := filepath.Dir(storePath)
+
 	// Convert both to absolute paths for comparison
 	localBeadsDirAbs, err := filepath.Abs(localBeadsDir)
 	if err != nil {
 		localBeadsDirAbs = filepath.Clean(localBeadsDir)
 	}
-	initDBDirAbs, err := filepath.Abs(initDBDir)
+	storeDirAbs, err := filepath.Abs(storeDir)
 	if err != nil {
-		initDBDirAbs = filepath.Clean(initDBDir)
+		storeDirAbs = filepath.Clean(storeDir)
 	}
-	
-	useLocalBeads := filepath.Clean(initDBDirAbs) == filepath.Clean(localBeadsDirAbs)
+
+	useLocalBeads := filepath.Clean(storeDirAbs) == filepath.Clean(localBeadsDirAbs)
 	
 	if useLocalBeads {
 		// Create .beads directory
@@ -88,9 +112,93 @@ and database file. Optionally specify a custom issue prefix.`,
 			os.Exit(1)
 		}
 
+		// Handle --no-db mode: create nodb_prefix.txt instead of database
+		if noDb {
+			prefixFile := filepath.Join(localBeadsDir, "nodb_prefix.txt")
+			if err := os.WriteFile(prefixFile, []byte(prefix+"\n"), 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: failed to write prefix file: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Create empty issues.jsonl file
+			jsonlPath := filepath.Join(localBeadsDir, "issues.jsonl")
+			if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
+				if err := os.WriteFile(jsonlPath, []byte{}, 0644); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: failed to create issues.jsonl: %v\n", err)
+					os.Exit(1)
+				}
+			}
+
+			if !quiet {
+				green := color.New(color.FgGreen).SprintFunc()
+				cyan := color.New(color.FgCyan).SprintFunc()
+
+				fmt.Printf("\n%s bd initialized successfully in --no-db mode!\n\n", green("✓"))
+				fmt.Printf("  Mode: %s\n", cyan("no-db (JSONL-only)"))
+				fmt.Printf("  Issues file: %s\n", cyan(jsonlPath))
+				fmt.Printf("  Issue prefix: %s\n", cyan(prefix))
+				fmt.Printf("  Issues will be named: %s\n\n", cyan(prefix+"-1, "+prefix+"-2, ..."))
+				fmt.Printf("Run %s to get started.\n\n", cyan("bd --no-db quickstart"))
+			}
+			return
+		}
+
+		// Create or update config.yaml in .beads directory
+		configPath := filepath.Join(localBeadsDir, "config.yaml")
+		configData := make(map[string]interface{})
+
+		// Check if config already exists (from version control)
+		if existingData, err := os.ReadFile(configPath); err == nil {
+			// Parse existing config
+			if err := yaml.Unmarshal(existingData, &configData); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to parse existing config.yaml: %v\n", err)
+				configData = make(map[string]interface{})
+			}
+		}
+
+		// Only set values if not already present (respect existing config)
+		if _, exists := configData["backend"]; !exists {
+			configData["backend"] = backend
+		}
+		if _, exists := configData["issue-prefix"]; !exists {
+			configData["issue-prefix"] = prefix
+		}
+		if backend == "markdown" {
+			if _, exists := configData["no-db"]; !exists {
+				configData["no-db"] = false
+			}
+		}
+
+		configBytes, err := yaml.Marshal(configData)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to marshal config: %v\n", err)
+		} else {
+			if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to create config.yaml: %v\n", err)
+			}
+		}
+
 		// Create .gitignore in .beads directory
 		gitignorePath := filepath.Join(localBeadsDir, ".gitignore")
-		gitignoreContent := `# SQLite databases
+		var gitignoreContent string
+		if backend == "markdown" {
+			gitignoreContent = `# Markdown backend - markdown_db/ directory contains source of truth
+
+# Markdown backend temporary files (inside markdown_db/issues/)
+markdown_db/issues/*.tmp.*
+markdown_db/issues/*.lock.*
+markdown_db/issues/*.trash.*
+
+# Daemon runtime files
+daemon.log
+daemon.pid
+bd.sock
+
+# Note: markdown_db/ directory and its .md files are tracked in git
+# This is the source of truth for the markdown backend
+`
+		} else {
+			gitignoreContent = `# SQLite databases
 *.db
 *.db-journal
 *.db-wal
@@ -110,31 +218,33 @@ bd.db
 !*.jsonl
 !config.json
 `
-			if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0600); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
-				// Non-fatal - continue anyway
-			}
+		}
+		if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0600); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
+			// Non-fatal - continue anyway
+		}
 		}
 	
-		// Ensure parent directory exists for the database
-		if err := os.MkdirAll(initDBDir, 0750); err != nil {
-		 fmt.Fprintf(os.Stderr, "Error: failed to create database directory %s: %v\n", initDBDir, err)
-		 os.Exit(1)
-		}
-		
-		store, err := sqlite.New(initDBPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to create database: %v\n", err)
+		// Ensure parent directory exists for the storage
+		if err := os.MkdirAll(storeDir, 0750); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create storage directory %s: %v\n", storeDir, err)
 			os.Exit(1)
 		}
 
-		// Set the issue prefix in config
-		ctx := context.Background()
-		if err := store.SetConfig(ctx, "issue_prefix", prefix); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix: %v\n", err)
-		_ = store.Close()
-		os.Exit(1)
+		// Create storage backend
+		var store storage.Storage
+		if backend == "markdown" {
+			store, err = markdown.New(storePath)
+		} else {
+			store, err = sqlite.New(storePath)
 		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create %s backend: %v\n", backend, err)
+			os.Exit(1)
+		}
+
+		// Prefix is now stored only in .beads/config.yaml (single source of truth)
+		ctx := context.Background()
 
 		// Store the bd version in metadata (for version mismatch detection)
 		if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
@@ -186,7 +296,7 @@ bd.db
 		fmt.Fprintf(os.Stderr, "\n✓ Database initialized. Found %d issues in git, importing...\n", issueCount)
 		}
 		
-		if err := importFromGit(ctx, initDBPath, store, jsonlPath); err != nil {
+		if err := importFromGit(ctx, storePath, store, jsonlPath); err != nil {
 		if !quiet {
 		fmt.Fprintf(os.Stderr, "Warning: auto-import failed: %v\n", err)
 		fmt.Fprintf(os.Stderr, "Try manually: git show HEAD:%s | bd import -i /dev/stdin\n", jsonlPath)
@@ -219,10 +329,16 @@ if quiet {
 
 		green := color.New(color.FgGreen).SprintFunc()
 		cyan := color.New(color.FgCyan).SprintFunc()
-	yellow := color.New(color.FgYellow).SprintFunc()
+		yellow := color.New(color.FgYellow).SprintFunc()
 
 		fmt.Printf("\n%s bd initialized successfully!\n\n", green("✓"))
-		fmt.Printf("  Database: %s\n", cyan(initDBPath))
+		fmt.Printf("  Backend: %s\n", cyan(backend))
+		if backend == "markdown" {
+			fmt.Printf("  Storage: %s\n", cyan(storePath))
+			fmt.Printf("  Issues directory: %s\n", cyan(filepath.Join(storePath, "issues")))
+		} else {
+			fmt.Printf("  Database: %s\n", cyan(storePath))
+		}
 		fmt.Printf("  Issue prefix: %s\n", cyan(prefix))
 		fmt.Printf("  Issues will be named: %s\n\n", cyan(prefix+"-1, "+prefix+"-2, ..."))
 	
@@ -255,6 +371,7 @@ if quiet {
 func init() {
 	initCmd.Flags().StringP("prefix", "p", "", "Issue prefix (default: current directory name)")
 	initCmd.Flags().BoolP("quiet", "q", false, "Suppress output (quiet mode)")
+	initCmd.Flags().String("backend", "sqlite", "Storage backend: sqlite or markdown")
 	rootCmd.AddCommand(initCmd)
 }
 

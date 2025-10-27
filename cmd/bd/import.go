@@ -28,6 +28,13 @@ Behavior:
   - Use --dedupe-after to find and merge content duplicates after import
   - Use --dry-run to preview changes without applying them`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Disable import when no-json is enabled
+		if noJson {
+			fmt.Fprintf(os.Stderr, "Error: import command is disabled when --no-json is enabled\n")
+			fmt.Fprintf(os.Stderr, "The backend is the source of truth and JSONL import is disabled\n")
+			os.Exit(1)
+		}
+
 		input, _ := cmd.Flags().GetString("input")
 		skipUpdate, _ := cmd.Flags().GetBool("skip-existing")
 		strict, _ := cmd.Flags().GetBool("strict")

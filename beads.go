@@ -136,11 +136,10 @@ func FindDatabasePath() string {
 	return ""
 }
 
-// FindJSONLPath returns the expected JSONL file path for the given database path.
-// It searches for existing *.jsonl files in the database directory and returns
-// the first one found, or defaults to "issues.jsonl".
+// FindJSONLPath returns the canonical JSONL file path for the given database path.
+// This always returns "issues.jsonl" in the database directory as per bd's standard.
 //
-// This function does not create directories or files - it only discovers paths.
+// This function does not create directories or files - it only constructs the path.
 // Use this when you need to know where bd stores its JSONL export.
 func FindJSONLPath(dbPath string) string {
 	if dbPath == "" {
@@ -150,15 +149,7 @@ func FindJSONLPath(dbPath string) string {
 	// Get the directory containing the database
 	dbDir := filepath.Dir(dbPath)
 
-	// Look for existing .jsonl files in the .beads directory
-	pattern := filepath.Join(dbDir, "*.jsonl")
-	matches, err := filepath.Glob(pattern)
-	if err == nil && len(matches) > 0 {
-		// Return the first .jsonl file found
-		return matches[0]
-	}
-
-	// Default to issues.jsonl
+	// Always use issues.jsonl as the canonical filename
 	return filepath.Join(dbDir, "issues.jsonl")
 }
 
@@ -169,8 +160,8 @@ type DatabaseInfo struct {
 	IssueCount int   // Number of issues (-1 if unknown)
 }
 
-// findDatabaseInTree walks up the directory tree looking for .beads/*.db
-// Prefers config.json, falls back to beads.db, and returns an error if multiple .db files exist
+// findDatabaseInTree walks up the directory tree looking for .beads/*.db or .beads/markdown_db/
+// Prefers config.json, then markdown_db/, then falls back to beads.db
 func findDatabaseInTree() string {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -189,10 +180,16 @@ func findDatabaseInTree() string {
 				}
 			}
 
+			// Check for markdown_db directory
+			markdownDB := filepath.Join(beadsDir, "markdown_db")
+			if mdInfo, err := os.Stat(markdownDB); err == nil && mdInfo.IsDir() {
+				return markdownDB
+			}
+
 			// Fall back to canonical beads.db for backward compatibility
 			canonicalDB := filepath.Join(beadsDir, CanonicalDatabaseName)
 			if _, err := os.Stat(canonicalDB); err == nil {
-			return canonicalDB
+				return canonicalDB
 			}
 
 			// Found .beads/ directory, look for *.db files

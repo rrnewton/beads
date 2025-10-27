@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/steveyegge/beads/internal/storage"
+	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -200,54 +201,56 @@ func importIssuesCore(ctx context.Context, dbPath string, store storage.Storage,
 		MismatchPrefixes: make(map[string]int),
 	}
 
-	// Phase 1: Get or create SQLite store
-	sqliteStore, needCloseStore, err := getOrCreateStore(ctx, dbPath, store)
+	// Phase 1: Get or create store (any backend)
+	importStore, needCloseStore, err := getOrCreateStore(ctx, dbPath, store)
 	if err != nil {
 		return nil, err
 	}
 	if needCloseStore {
-		defer func() { _ = sqliteStore.Close() }()
+		defer func() { _ = importStore.Close() }()
 	}
 
-	// Phase 2: Check and handle prefix mismatches
-	if err := handlePrefixMismatch(ctx, sqliteStore, issues, opts, result); err != nil {
+	// Check if this is a SQLite store for advanced features
+	sqliteStore, isSQLite := importStore.(*sqlite.SQLiteStorage)
+
+	// Phase 2: Check and handle prefix mismatches (requires GetConfig, available in all backends)
+	if err := handlePrefixMismatch(ctx, importStore, issues, opts, result); err != nil {
 		return result, err
 	}
 
-	// Phase 3: Detect and resolve collisions
-	issues, err = handleCollisions(ctx, sqliteStore, issues, opts, result)
-	if err != nil {
-		return result, err
-	}
-	if opts.DryRun && result.Collisions == 0 {
-		return result, nil
+	// Phase 3: Detect and resolve collisions (SQLite-only feature)
+	if isSQLite {
+		issues, err = handleCollisions(ctx, sqliteStore, issues, opts, result)
+		if err != nil {
+			return result, err
+		}
+		if opts.DryRun && result.Collisions == 0 {
+			return result, nil
+		}
 	}
 
-	// Phase 4: Upsert issues (create new or update existing)
-	if err := upsertIssues(ctx, sqliteStore, issues, opts, result); err != nil {
+	// Phase 4: Upsert issues (create new or update existing) - works with any backend
+	if err := upsertIssues(ctx, importStore, issues, opts, result); err != nil {
 		return nil, err
 	}
 
-	// Phase 5: Import dependencies
-	if err := importDependencies(ctx, sqliteStore, issues, opts); err != nil {
-		return nil, err
-	}
+	// Phase 5-7: Import dependencies, labels, comments (SQLite-only for now)
+	if isSQLite {
+		if err := importDependencies(ctx, sqliteStore, issues, opts); err != nil {
+			return nil, err
+		}
+		if err := importLabels(ctx, sqliteStore, issues, opts); err != nil {
+			return nil, err
+		}
+		if err := importComments(ctx, sqliteStore, issues, opts); err != nil {
+			return nil, err
+		}
 
-	// Phase 6: Import labels
-	if err := importLabels(ctx, sqliteStore, issues, opts); err != nil {
-		return nil, err
-	}
-
-	// Phase 7: Import comments
-	if err := importComments(ctx, sqliteStore, issues, opts); err != nil {
-		return nil, err
-	}
-
-	// Phase 8: Checkpoint WAL to update main .db file timestamp
-	// This ensures staleness detection sees the database as fresh
-	if err := sqliteStore.CheckpointWAL(ctx); err != nil {
-		// Non-fatal - just log warning
-		fmt.Fprintf(os.Stderr, "Warning: failed to checkpoint WAL: %v\n", err)
+		// Phase 8: Checkpoint WAL to update main .db file timestamp
+		if err := sqliteStore.CheckpointWAL(ctx); err != nil {
+			// Non-fatal - just log warning
+			fmt.Fprintf(os.Stderr, "Warning: failed to checkpoint WAL: %v\n", err)
+		}
 	}
 
 	return result, nil

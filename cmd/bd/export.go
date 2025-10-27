@@ -136,6 +136,13 @@ Issues are sorted by ID for consistent diffs.
 
 Output to stdout by default, or use -o flag for file output.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Disable export when no-json is enabled
+		if noJson {
+			fmt.Fprintf(os.Stderr, "Error: export command is disabled when --no-json is enabled\n")
+			fmt.Fprintf(os.Stderr, "The backend is the source of truth and JSONL export is disabled\n")
+			os.Exit(1)
+		}
+
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
 		statusFilter, _ := cmd.Flags().GetString("status")
