@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
+	"gopkg.in/yaml.v3"
 )
 
 func TestValidatePrefix(t *testing.T) {
@@ -40,8 +42,32 @@ func TestValidatePrefix(t *testing.T) {
 
 func TestRenamePrefixCommand(t *testing.T) {
 	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
 
+	// Create .beads directory and config.yaml
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0750); err != nil {
+		t.Fatalf("Failed to create .beads directory: %v", err)
+	}
+
+	// Write initial config with old prefix
+	configPath := filepath.Join(beadsDir, "config.yaml")
+	configData := map[string]interface{}{"issue_prefix": "old", "backend": "sqlite"}
+	configBytes, _ := yaml.Marshal(configData)
+	if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
+		t.Fatalf("Failed to write config.yaml: %v", err)
+	}
+
+	// Change to temp directory so config can be found
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(tmpDir)
+
+	// Initialize config
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
+	dbPath := filepath.Join(beadsDir, "test.db")
 	testStore, err := sqlite.New(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
@@ -56,10 +82,6 @@ func TestRenamePrefixCommand(t *testing.T) {
 		store = nil
 		actor = ""
 	}()
-
-	if err := testStore.SetConfig(ctx, "issue_prefix", "old"); err != nil {
-		t.Fatalf("Failed to set config: %v", err)
-	}
 
 	issue1 := &types.Issue{
 		ID:          "old-1",
@@ -111,12 +133,20 @@ func TestRenamePrefixCommand(t *testing.T) {
 		t.Fatalf("renamePrefixInDB failed: %v", err)
 	}
 
-	newPrefix, err := testStore.GetConfig(ctx, "issue_prefix")
+	// Verify prefix was updated in global config
+	configData, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("Failed to get new prefix: %v", err)
+		t.Fatalf("Failed to read config.yaml: %v", err)
 	}
-	if newPrefix != "new" {
-		t.Errorf("Expected prefix 'new', got %q", newPrefix)
+
+	var cfg map[string]interface{}
+	if err := yaml.Unmarshal(configData, &cfg); err != nil {
+		t.Fatalf("Failed to parse config.yaml: %v", err)
+	}
+
+	newPrefix, ok := cfg["issue_prefix"].(string)
+	if !ok || newPrefix != "new" {
+		t.Errorf("Expected prefix 'new' in config.yaml, got %q", newPrefix)
 	}
 
 	updatedIssue1, err := testStore.GetIssue(ctx, "new-1")

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	// Import SQLite driver
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 	_ "modernc.org/sqlite"
 )
@@ -577,14 +578,11 @@ func (s *SQLiteStorage) CreateIssue(ctx context.Context, issue *types.Issue, act
 
 	// Generate ID if not set (inside transaction to prevent race conditions)
 	if issue.ID == "" {
-		// Get prefix from config
-		var prefix string
-		err := conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-		if err == sql.ErrNoRows || prefix == "" {
-			// Config not set - derive prefix from database filename
+		// Get prefix from global config (.beads/config.yaml)
+		prefix := config.GetString("issue_prefix")
+		if prefix == "" {
+			// Config not set - derive prefix from database filename as fallback
 			prefix = derivePrefixFromPath(s.dbPath)
-		} else if err != nil {
-			return fmt.Errorf("failed to get config: %w", err)
 		}
 
 		// Atomically initialize counter (if needed) and get next ID (within transaction)
@@ -712,19 +710,16 @@ func generateBatchIDs(ctx context.Context, conn *sql.Conn, issues []*types.Issue
 		return nil
 	}
 
-	// Get prefix from config
-	var prefix string
-	err := conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-	if err == sql.ErrNoRows || prefix == "" {
-		// Config not set - derive prefix from database filename
+	// Get prefix from global config (.beads/config.yaml)
+	prefix := config.GetString("issue_prefix")
+	if prefix == "" {
+		// Config not set - derive prefix from database filename as fallback
 		prefix = derivePrefixFromPath(dbPath)
-	} else if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Atomically reserve ID range
 	var nextID int
-	err = conn.QueryRowContext(ctx, `
+	err := conn.QueryRowContext(ctx, `
 		INSERT INTO issue_counters (prefix, last_id)
 		SELECT ?, COALESCE(MAX(CAST(substr(id, LENGTH(?) + 2) AS INTEGER)), 0) + ?
 		FROM issues

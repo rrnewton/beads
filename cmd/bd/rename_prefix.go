@@ -114,7 +114,7 @@ Example:
 		if len(issues) == 0 {
 			fmt.Printf("No issues to rename. Updating prefix to %s\n", newPrefix)
 			if !dryRun {
-				if err := setIssuePrefix(ctx, store, newPrefix); err != nil {
+				if err := updateIssuePrefix(newPrefix); err != nil {
 					fmt.Fprintf(os.Stderr, "Error: failed to update prefix: %v\n", err)
 					os.Exit(1)
 				}
@@ -352,7 +352,7 @@ func repairPrefixes(ctx context.Context, st storage.Storage, actorName string, t
 	}
 
 	// Set the new prefix in config
-	if err := setIssuePrefix(ctx, st, targetPrefix); err != nil {
+	if err := updateIssuePrefix(targetPrefix); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 
@@ -423,7 +423,7 @@ func renamePrefixInDB(ctx context.Context, oldPrefix, newPrefix string, issues [
 		return fmt.Errorf("failed to update counter: %w", err)
 	}
 
-	if err := setIssuePrefix(ctx, store, newPrefix); err != nil {
+	if err := updateIssuePrefix(newPrefix); err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
 	}
 

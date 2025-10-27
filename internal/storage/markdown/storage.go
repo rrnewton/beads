@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
 	"gopkg.in/yaml.v3"
@@ -103,10 +104,10 @@ func (m *MarkdownStorage) CreateIssue(ctx context.Context, issue *types.Issue, a
 
 	// Generate ID if not set
 	if issue.ID == "" {
-		// Get prefix from config
-		prefix, err := m.GetConfig(ctx, "issue_prefix")
-		if err != nil || prefix == "" {
-			// Config not set - derive prefix from path
+		// Get prefix from global config (.beads/config.yaml)
+		prefix := config.GetString("issue_prefix")
+		if prefix == "" {
+			// Config not set - derive prefix from path as fallback
 			prefix = derivePrefixFromMarkdownPath(m.rootDir)
 		}
 

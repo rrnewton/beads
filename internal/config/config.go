@@ -76,7 +76,7 @@ func Initialize() error {
 	v.SetDefault("db", "")
 	v.SetDefault("actor", "")
 	v.SetDefault("backend", "sqlite")
-	v.SetDefault("issue-prefix", "")
+	v.SetDefault("issue_prefix", "")
 	
 	// Additional environment variables (not prefixed with BD_)
 	// These are bound explicitly for backward compatibility
@@ -171,4 +171,35 @@ func IsSet(key string) bool {
 		return false
 	}
 	return v.IsSet(key)
+}
+
+// WriteConfig writes the current configuration to the config file
+func WriteConfig() error {
+	if v == nil {
+		return fmt.Errorf("viper not initialized")
+	}
+	// Try to write to the existing config file
+	if err := v.WriteConfig(); err != nil {
+		// If config file doesn't exist, try to create it
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Find .beads directory in current working directory or parent
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get current directory: %w", err)
+			}
+
+			// Walk up to find .beads directory
+			for dir := cwd; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+				beadsDir := filepath.Join(dir, ".beads")
+				if info, err := os.Stat(beadsDir); err == nil && info.IsDir() {
+					configPath := filepath.Join(beadsDir, "config.yaml")
+					return v.WriteConfigAs(configPath)
+				}
+			}
+
+			return fmt.Errorf("no .beads directory found")
+		}
+		return err
+	}
+	return nil
 }

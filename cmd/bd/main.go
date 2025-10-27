@@ -559,17 +559,6 @@ func openStorage(dbPath string) (storage.Storage, error) {
 			return nil, err
 		}
 
-		// Sync prefix from global config to backend config if needed
-		ctx := context.Background()
-		if _, err := getIssuePrefix(ctx, store); err != nil {
-			// Backend config doesn't have prefix, check global config
-			globalPrefix := config.GetString("issue-prefix")
-			if globalPrefix != "" {
-				// Copy prefix from global config to backend config
-				_ = setIssuePrefix(ctx, store, globalPrefix)
-			}
-		}
-
 		return store, nil
 	case "sqlite":
 		return sqlite.New(dbPath)
@@ -578,25 +567,20 @@ func openStorage(dbPath string) (storage.Storage, error) {
 	}
 }
 
-// getIssuePrefix gets the issue prefix
-// Checks backend storage first (issue_prefix), then global config (issue-prefix)
+// getIssuePrefix gets the issue prefix from global config (.beads/config.yaml)
 func getIssuePrefix(ctx context.Context, store storage.Storage) (string, error) {
-	// Try backend storage config
-	if prefix, err := store.GetConfig(ctx, "issue_prefix"); err == nil && prefix != "" {
-		return prefix, nil
+	// Read from global config only - single source of truth
+	prefix := config.GetString("issue_prefix")
+	if prefix == "" {
+		return "", fmt.Errorf("prefix not configured in .beads/config.yaml")
 	}
-
-	// Try global config (Viper) with hyphenated key
-	if prefix := config.GetString("issue-prefix"); prefix != "" {
-		return prefix, nil
-	}
-
-	return "", fmt.Errorf("prefix not configured")
+	return prefix, nil
 }
 
-// setIssuePrefix sets the issue prefix using the standardized key
-func setIssuePrefix(ctx context.Context, store storage.Storage, prefix string) error {
-	return store.SetConfig(ctx, "issue_prefix", prefix)
+// updateIssuePrefix updates the issue prefix in global config (.beads/config.yaml)
+func updateIssuePrefix(newPrefix string) error {
+	config.Set("issue_prefix", newPrefix)
+	return config.WriteConfig()
 }
 
 // detectBackend determines which storage backend to use

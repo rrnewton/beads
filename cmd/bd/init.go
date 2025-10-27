@@ -150,8 +150,8 @@ With --no-db: creates .beads/ directory and nodb_prefix.txt file instead of SQLi
 		if _, exists := configData["backend"]; !exists {
 			configData["backend"] = backend
 		}
-		if _, exists := configData["issue-prefix"]; !exists {
-			configData["issue-prefix"] = prefix
+		if _, exists := configData["issue_prefix"]; !exists {
+			configData["issue_prefix"] = prefix
 		}
 		if backend == "markdown" {
 			if _, exists := configData["no-db"]; !exists {
@@ -229,13 +229,8 @@ bd.db
 			os.Exit(1)
 		}
 
-		// Set the issue prefix in backend config using standardized key
+		// Prefix is now stored only in .beads/config.yaml (single source of truth)
 		ctx := context.Background()
-		if err := setIssuePrefix(ctx, store, prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix: %v\n", err)
-			_ = store.Close()
-			os.Exit(1)
-		}
 
 		// Store the bd version in metadata (for version mismatch detection)
 		if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
