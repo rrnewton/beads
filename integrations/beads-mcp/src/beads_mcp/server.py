@@ -152,30 +152,53 @@ def require_context(func: Callable[..., T]) -> Callable[..., T]:
 
 
 def _find_beads_db(workspace_root: str) -> str | None:
-    """Find .beads/*.db by walking up from workspace_root.
-    
+    """Find beads database by walking up from workspace_root.
+
+    Supports both SQLite and markdown backends by reading .beads/config.yaml.
+
     Args:
         workspace_root: Starting directory to search from
-        
+
     Returns:
-        Absolute path to first .db file found in .beads/, None otherwise
+        Absolute path to database (.db file or markdown_db directory), None otherwise
     """
     import glob
     current = os.path.abspath(workspace_root)
-    
+
     while True:
         beads_dir = os.path.join(current, ".beads")
         if os.path.isdir(beads_dir):
-            # Find any .db file in .beads/
-            db_files = glob.glob(os.path.join(beads_dir, "*.db"))
-            if db_files:
-                return db_files[0]  # Return first .db file found
-        
+            # Read config.yaml to determine backend
+            config_path = os.path.join(beads_dir, "config.yaml")
+            backend = "sqlite"  # Default to sqlite
+
+            if os.path.exists(config_path):
+                try:
+                    import yaml
+                    with open(config_path, 'r') as f:
+                        config = yaml.safe_load(f)
+                        if config and isinstance(config, dict):
+                            backend = config.get("backend", "sqlite")
+                except Exception:
+                    # If we can't read config, assume sqlite
+                    pass
+
+            # Find database based on backend type
+            if backend == "markdown":
+                markdown_db = os.path.join(beads_dir, "markdown_db")
+                if os.path.isdir(markdown_db):
+                    return markdown_db
+            else:
+                # SQLite backend - find any .db file in .beads/
+                db_files = glob.glob(os.path.join(beads_dir, "*.db"))
+                if db_files:
+                    return db_files[0]  # Return first .db file found
+
         parent = os.path.dirname(current)
         if parent == current:  # Reached root
             break
         current = parent
-    
+
     return None
 
 
