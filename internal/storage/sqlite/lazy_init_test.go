@@ -2,8 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/steveyegge/beads/internal/types"
@@ -14,28 +12,10 @@ const testIssueCustom1 = "custom-1"
 // TestLazyCounterInitialization verifies that counters are initialized lazily
 // on first use, not by scanning the entire database on every CreateIssue
 func TestLazyCounterInitialization(t *testing.T) {
-	// Create temporary directory
-	tmpDir, err := os.MkdirTemp("", "beads-lazy-init-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Initialize database
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
+	defer cleanup()
 
 	ctx := context.Background()
-
-	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Create some issues with explicit IDs (simulating import)
 	existingIssues := []string{"bd-5", "bd-10", "bd-15"}
@@ -55,7 +35,7 @@ func TestLazyCounterInitialization(t *testing.T) {
 
 	// Verify no counter exists yet (lazy init hasn't happened)
 	var count int
-	err = store.db.QueryRow(`SELECT COUNT(*) FROM issue_counters WHERE prefix = 'bd'`).Scan(&count)
+	err := store.db.QueryRow(`SELECT COUNT(*) FROM issue_counters WHERE prefix = 'bd'`).Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to query counters: %v", err)
 	}
@@ -113,47 +93,31 @@ func TestLazyCounterInitialization(t *testing.T) {
 }
 
 // TestLazyCounterInitializationMultiplePrefix tests lazy init with multiple prefixes
+// Note: With global config, prefixes are set at project level, but the counter system
+// still needs to handle multiple prefixes (e.g., from imports or explicit IDs)
 func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "test")
 	defer cleanup()
 
 	ctx := context.Background()
 
-	// Set a custom prefix
-	err := store.SetConfig(ctx, "issue_prefix", "custom")
-	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
-	}
-
-	// Create issue with default prefix first
-	err = store.SetConfig(ctx, "issue_prefix", "bd")
-	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
-	}
-
+	// Create issues with explicit IDs using different prefixes
+	// This simulates having issues imported from different sources
 	bdIssue := &types.Issue{
+		ID:        "bd-1",
 		Title:     "BD issue",
 		Status:    types.StatusOpen,
 		Priority:  2,
 		IssueType: types.TypeTask,
 	}
 
-	err = store.CreateIssue(ctx, bdIssue, "test-user")
+	err := store.CreateIssue(ctx, bdIssue, "test-user")
 	if err != nil {
-		t.Fatalf("CreateIssue failed: %v", err)
-	}
-
-	if bdIssue.ID != "bd-1" {
-		t.Errorf("Expected bd-1, got %s", bdIssue.ID)
-	}
-
-	// Now switch to custom prefix
-	err = store.SetConfig(ctx, "issue_prefix", "custom")
-	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
+		t.Fatalf("CreateIssue with explicit ID failed: %v", err)
 	}
 
 	customIssue := &types.Issue{
+		ID:        testIssueCustom1,
 		Title:     "Custom issue",
 		Status:    types.StatusOpen,
 		Priority:  2,
@@ -162,37 +126,48 @@ func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
 
 	err = store.CreateIssue(ctx, customIssue, "test-user")
 	if err != nil {
+		t.Fatalf("CreateIssue with explicit ID failed: %v", err)
+	}
+
+	// Now create an auto-generated issue with the configured prefix
+	testIssue := &types.Issue{
+		Title:     "Test issue",
+		Status:    types.StatusOpen,
+		Priority:  2,
+		IssueType: types.TypeTask,
+	}
+
+	err = store.CreateIssue(ctx, testIssue, "test-user")
+	if err != nil {
 		t.Fatalf("CreateIssue failed: %v", err)
 	}
 
-	if customIssue.ID != testIssueCustom1 {
-		t.Errorf("Expected custom-1, got %s", customIssue.ID)
+	// Should get test-1 (using configured prefix)
+	if testIssue.ID != "test-1" {
+		t.Errorf("Expected test-1, got %s", testIssue.ID)
 	}
 
-	// Verify both counters exist
+	// Verify counter was created for the configured prefix
 	var count int
-	err = store.db.QueryRow(`SELECT COUNT(*) FROM issue_counters`).Scan(&count)
+	err = store.db.QueryRow(`SELECT COUNT(*) FROM issue_counters WHERE prefix = 'test'`).Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to query counters: %v", err)
 	}
 
-	if count != 2 {
-		t.Errorf("Expected 2 counters, got %d", count)
+	if count != 1 {
+		t.Errorf("Expected 1 counter for 'test' prefix, got %d", count)
 	}
 }
 
 // TestCounterInitializationFromExisting tests that the counter
 // correctly initializes from the max ID of existing issues
 func TestCounterInitializationFromExisting(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Create issues with explicit IDs, out of order
 	explicitIDs := []string{"bd-5", "bd-100", "bd-42", "bd-7"}

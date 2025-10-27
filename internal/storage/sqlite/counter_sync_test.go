@@ -10,15 +10,10 @@ import (
 
 // TestCounterSyncAfterDelete verifies that counters are synced after deletion (bd-49)
 func TestCounterSyncAfterDelete(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
-
-	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Create issues bd-1 through bd-5
 	for i := 1; i <= 5; i++ {
@@ -92,15 +87,10 @@ func TestCounterSyncAfterDelete(t *testing.T) {
 
 // TestCounterSyncAfterBatchDelete verifies that counters are synced after batch deletion (bd-49)
 func TestCounterSyncAfterBatchDelete(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
-
-	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Create issues bd-1 through bd-10
 	for i := 1; i <= 10; i++ {
@@ -173,15 +163,10 @@ func TestCounterSyncAfterBatchDelete(t *testing.T) {
 
 // TestCounterSyncAfterDeleteAll verifies counter resets when all issues deleted (bd-49)
 func TestCounterSyncAfterDeleteAll(t *testing.T) {
-	store, cleanup := setupTestDB(t)
+	store, cleanup := setupTestDBWithPrefix(t, "bd")
 	defer cleanup()
 
 	ctx := context.Background()
-
-	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
 
 	// Create issues bd-1 through bd-5
 	for i := 1; i <= 5; i++ {

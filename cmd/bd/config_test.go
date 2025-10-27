@@ -152,45 +152,6 @@ func TestConfigNamespaces(t *testing.T) {
 
 // setupTestDB creates a temporary test database with global config
 func setupTestDB(t *testing.T) (*sqlite.SQLiteStorage, func()) {
-	tmpDir, err := os.MkdirTemp("", "bd-test-config-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-
-	// Create .beads directory and config.yaml
-	beadsDir := filepath.Join(tmpDir, ".beads")
-	if err := os.MkdirAll(beadsDir, 0750); err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create .beads directory: %v", err)
-	}
-
-	// Write config with test prefix
-	configPath := filepath.Join(beadsDir, "config.yaml")
-	configData := map[string]interface{}{"issue_prefix": "test", "backend": "sqlite"}
-	configBytes, _ := yaml.Marshal(configData)
-	if err := os.WriteFile(configPath, configBytes, 0644); err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to write config.yaml: %v", err)
-	}
-
-	// Change to temp directory and initialize config
-	origWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	config.Initialize()
-
-	testDB := filepath.Join(beadsDir, "test.db")
-	store, err := sqlite.New(testDB)
-	if err != nil {
-		os.Chdir(origWd)
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	cleanup := func() {
-		store.Close()
-		os.Chdir(origWd)
-		os.RemoveAll(tmpDir)
-	}
-
+	store, _, cleanup := setupTestStore(t, "test")
 	return store, cleanup
 }
