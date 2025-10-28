@@ -1,6 +1,7 @@
 package compact
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"testing"
@@ -13,6 +14,11 @@ import (
 func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 	t.Helper()
 
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
 	tmpDB := t.TempDir() + "/test.db"
 	store, err := sqlite.New(tmpDB)
 	if err != nil {
@@ -21,7 +27,7 @@ func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 
 	ctx := context.Background()
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set issue-prefix: %v", err)
 	}
 	if err := store.SetConfig(ctx, "compact_tier1_days", "0"); err != nil {

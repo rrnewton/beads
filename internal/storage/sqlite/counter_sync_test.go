@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"fmt"
 	"testing"
@@ -16,7 +17,7 @@ func TestCounterSyncAfterDelete(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -98,7 +99,7 @@ func TestCounterSyncAfterBatchDelete(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -179,7 +180,7 @@ func TestCounterSyncAfterDeleteAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -13,6 +14,11 @@ import (
 
 func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 	t.Helper()
+
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
 
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "beads-test-*")
@@ -27,12 +33,11 @@ func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 		t.Fatalf("failed to create storage: %v", err)
 	}
 
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		store.Close()
 		os.RemoveAll(tmpDir)
-		t.Fatalf("failed to set issue_prefix: %v", err)
+		t.Fatalf("failed to set issue-prefix: %v", err)
 	}
 
 	cleanup := func() {
@@ -1301,9 +1306,9 @@ func TestInMemoryDatabase(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Set issue_prefix (bd-166)
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
+	// Set issue-prefix (bd-166)
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		t.Fatalf("failed to set issue-prefix: %v", err)
 	}
 
 	// Verify we can create and retrieve an issue
@@ -1349,9 +1354,9 @@ func TestInMemorySharedCache(t *testing.T) {
 	}
 	defer store1.Close()
 
-	// Set issue_prefix (bd-166)
-	if err := store1.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
+	// Set issue-prefix (bd-166)
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		t.Fatalf("failed to set issue-prefix: %v", err)
 	}
 
 	// Create an issue in the first connection

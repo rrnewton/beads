@@ -1,6 +1,7 @@
 package beads_test
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -153,6 +154,11 @@ func (h *integrationTestHelper) assertCount(count, expected int, item string) {
 
 // TestLibraryIntegration tests the full public API that external users will use
 func TestLibraryIntegration(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
 	// Setup: Create a temporary database
 	tmpDir, err := os.MkdirTemp("", "beads-integration-*")
 	if err != nil {
@@ -168,8 +174,7 @@ func TestLibraryIntegration(t *testing.T) {
 	defer store.Close()
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -317,6 +322,11 @@ func TestIssueTypeConstants(t *testing.T) {
 
 // TestBatchCreateIssues tests creating multiple issues at once
 func TestBatchCreateIssues(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "beads-batch-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -333,7 +343,7 @@ func TestBatchCreateIssues(t *testing.T) {
 	ctx := context.Background()
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -397,6 +407,11 @@ func TestFindDatabasePathIntegration(t *testing.T) {
 
 // TestRoundTripIssue tests creating, updating, and retrieving an issue
 func TestRoundTripIssue(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "beads-roundtrip-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -411,8 +426,7 @@ func TestRoundTripIssue(t *testing.T) {
 	defer store.Close()
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 

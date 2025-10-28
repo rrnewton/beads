@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -681,7 +682,7 @@ func TestImportCounterSyncAfterHighID(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := testStore.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue prefix: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func TestRenumberWithGaps(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up config
-	if err := testStore.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set prefix: %v", err)
 	}
 
@@ -160,7 +161,7 @@ func TestRenumberWithTextReferences(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := testStore.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set prefix: %v", err)
 	}
 
@@ -249,7 +250,7 @@ func TestRenumberEmptyDatabase(t *testing.T) {
 
 	ctx := context.Background()
 
-	if err := testStore.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set prefix: %v", err)
 	}
 

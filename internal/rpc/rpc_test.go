@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"encoding/json"
 	"os"
@@ -14,6 +15,11 @@ import (
 )
 
 func setupTestServer(t *testing.T) (*Server, *Client, func()) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "bd-rpc-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -38,12 +44,11 @@ func setupTestServer(t *testing.T) (*Server, *Client, func()) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		store.Close()
 		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	server := NewServer(socketPath, store, tmpDir, dbPath)
@@ -387,9 +392,6 @@ func TestConcurrentRequests(t *testing.T) {
 				return
 			}
 			defer client.Close()
-
-			// Set database path so client routes to the correct test database
-			client.dbPath = server.dbPath
 
 			args := &CreateArgs{
 				Title:     "Concurrent Issue",
