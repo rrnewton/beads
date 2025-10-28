@@ -7,12 +7,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 )
 
 const testIssueBD1 = "bd-1"
 
 func TestDetectCollisions(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
 	// Create temporary database
 	tmpDir, err := os.MkdirTemp("", "collision-test-*")
 	if err != nil {
@@ -30,7 +36,7 @@ func TestDetectCollisions(t *testing.T) {
 	ctx := context.Background()
 
 	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set issue_prefix: %v", err)
 	}
 
@@ -436,6 +442,11 @@ func intPtr(i int) *int {
 }
 
 func TestScoreCollisions(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
 	// Create temporary database
 	tmpDir, err := os.MkdirTemp("", "score-collision-test-*")
 	if err != nil {
@@ -453,7 +464,7 @@ func TestScoreCollisions(t *testing.T) {
 	ctx := context.Background()
 
 	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set issue_prefix: %v", err)
 	}
 
@@ -630,6 +641,11 @@ func TestReplaceIDReferences(t *testing.T) {
 }
 
 func TestRemapCollisions(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
 	// Create temporary database
 	tmpDir, err := os.MkdirTemp("", "remap-collision-test-*")
 	if err != nil {
@@ -647,7 +663,7 @@ func TestRemapCollisions(t *testing.T) {
 	ctx := context.Background()
 
 	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("failed to set issue_prefix: %v", err)
 	}
 

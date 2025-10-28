@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/steveyegge/beads/internal/config"
 )
 
 func TestInitCommand(t *testing.T) {
@@ -147,19 +149,13 @@ func TestInitCommand(t *testing.T) {
 			t.Errorf("Database file was not created at %s", dbPath)
 			}
 
-			// Verify database has correct prefix
-			// Note: This database was already created by init command, just open it
-		store, err := openExistingTestDB(t, dbPath)
-			if err != nil {
-			 t.Fatalf("Failed to open database: %v", err)
-		}
-		defer store.Close()
-
-			ctx := context.Background()
-			prefix, err := store.GetConfig(ctx, "issue_prefix")
-			if err != nil {
-				t.Fatalf("Failed to get issue prefix from database: %v", err)
+			// Verify config.yaml has correct prefix
+			// Need to reinitialize config to read from the newly created config.yaml
+			if err := config.Initialize(); err != nil {
+				t.Fatalf("Failed to reinitialize config: %v", err)
 			}
+
+			prefix := config.GetIssuePrefix()
 
 			expectedPrefix := tt.prefix
 			if expectedPrefix == "" {
@@ -172,7 +168,15 @@ func TestInitCommand(t *testing.T) {
 				t.Errorf("Expected prefix %q, got %q", expectedPrefix, prefix)
 			}
 
+			// Verify database was created and is functional
+			store, err := openExistingTestDB(t, dbPath)
+			if err != nil {
+				t.Fatalf("Failed to open database: %v", err)
+			}
+			defer store.Close()
+
 			// Verify version metadata was set
+			ctx := context.Background()
 			version, err := store.GetMetadata(ctx, "bd_version")
 			if err != nil {
 				t.Errorf("Failed to get bd_version metadata: %v", err)
@@ -218,6 +222,16 @@ func TestInitAlreadyInitialized(t *testing.T) {
 		t.Fatalf("Second init failed: %v", err)
 	}
 
+	// Verify config.yaml has correct prefix after re-init
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to reinitialize config: %v", err)
+	}
+
+	prefix := config.GetIssuePrefix()
+	if prefix != "test" {
+		t.Errorf("Expected prefix 'test', got %q", prefix)
+	}
+
 	// Verify database still works (always beads.db now)
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
 	store, err := openExistingTestDB(t, dbPath)
@@ -225,16 +239,6 @@ func TestInitAlreadyInitialized(t *testing.T) {
 		t.Fatalf("Failed to open database: %v", err)
 	}
 	defer store.Close()
-
-	ctx := context.Background()
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
-		t.Fatalf("Failed to get prefix after re-init: %v", err)
-	}
-
-	if prefix != "test" {
-		t.Errorf("Expected prefix 'test', got %q", prefix)
-	}
 }
 
 func TestInitWithCustomDBPath(t *testing.T) {
@@ -280,22 +284,22 @@ func TestInitWithCustomDBPath(t *testing.T) {
 			t.Errorf("Database was not created at custom path %s", customDBPath)
 		}
 
+		// Verify config.yaml has correct prefix
+		if err := config.Initialize(); err != nil {
+			t.Fatalf("Failed to reinitialize config: %v", err)
+		}
+
+		prefix := config.GetIssuePrefix()
+		if prefix != "custom" {
+			t.Errorf("Expected prefix 'custom', got %q", prefix)
+		}
+
 		// Verify database works
 		store, err := openExistingTestDB(t, customDBPath)
 		if err != nil {
 			t.Fatalf("Failed to open database: %v", err)
 		}
 		defer store.Close()
-
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
-		if err != nil {
-			t.Fatalf("Failed to get prefix: %v", err)
-		}
-
-		if prefix != "custom" {
-			t.Errorf("Expected prefix 'custom', got %q", prefix)
-		}
 
 		// Verify .beads/ directory was NOT created in work directory
 		if _, err := os.Stat(filepath.Join(workDir, ".beads")); err == nil {
@@ -321,22 +325,22 @@ func TestInitWithCustomDBPath(t *testing.T) {
 			t.Errorf("Database was not created at BEADS_DB path %s", envDBPath)
 		}
 
+		// Verify config.yaml has correct prefix
+		if err := config.Initialize(); err != nil {
+			t.Fatalf("Failed to reinitialize config: %v", err)
+		}
+
+		prefix := config.GetIssuePrefix()
+		if prefix != "envtest" {
+			t.Errorf("Expected prefix 'envtest', got %q", prefix)
+		}
+
 		// Verify database works
 		store, err := openExistingTestDB(t, envDBPath)
 		if err != nil {
 			t.Fatalf("Failed to open database: %v", err)
 		}
 		defer store.Close()
-
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
-		if err != nil {
-			t.Fatalf("Failed to get prefix: %v", err)
-		}
-
-		if prefix != "envtest" {
-			t.Errorf("Expected prefix 'envtest', got %q", prefix)
-		}
 	})
 
 	// Test that BEADS_DB path containing ".beads" doesn't create CWD/.beads

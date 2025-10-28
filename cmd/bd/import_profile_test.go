@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -53,7 +54,7 @@ func profileImportOperation(t *testing.T, numIssues int) {
 	defer store.Close()
 
 	// Set test config
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
 
@@ -282,7 +283,7 @@ func TestImportWithExistingData(t *testing.T) {
 	}
 	defer store.Close()
 
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -64,8 +65,8 @@ Risks:
 			ctx := context.Background()
 
 		// Get prefix from config, or derive from first issue if not set
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
-		if err != nil || prefix == "" {
+		prefix := config.GetIssuePrefix()
+		if prefix == "" {
 			// Get any issue to derive prefix
 			issues, err := store.SearchIssues(ctx, "", types.IssueFilter{})
 			if err != nil || len(issues) == 0 {

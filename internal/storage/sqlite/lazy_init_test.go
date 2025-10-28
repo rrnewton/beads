@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -14,6 +15,11 @@ const testIssueCustom1 = "custom-1"
 // TestLazyCounterInitialization verifies that counters are initialized lazily
 // on first use, not by scanning the entire database on every CreateIssue
 func TestLazyCounterInitialization(t *testing.T) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
 	// Create temporary directory
 	tmpDir, err := os.MkdirTemp("", "beads-lazy-init-test-*")
 	if err != nil {
@@ -33,7 +39,7 @@ func TestLazyCounterInitialization(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -120,13 +126,13 @@ func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
 	ctx := context.Background()
 
 	// Set a custom prefix
-	err := store.SetConfig(ctx, "issue_prefix", "custom")
+	err := config.SetIssuePrefix("custom")
 	if err != nil {
 		t.Fatalf("SetConfig failed: %v", err)
 	}
 
 	// Create issue with default prefix first
-	err = store.SetConfig(ctx, "issue_prefix", "bd")
+	err = config.SetIssuePrefix("bd")
 	if err != nil {
 		t.Fatalf("SetConfig failed: %v", err)
 	}
@@ -148,7 +154,7 @@ func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
 	}
 
 	// Now switch to custom prefix
-	err = store.SetConfig(ctx, "issue_prefix", "custom")
+	err = config.SetIssuePrefix("custom")
 	if err != nil {
 		t.Fatalf("SetConfig failed: %v", err)
 	}
@@ -190,7 +196,7 @@ func TestCounterInitializationFromExisting(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 

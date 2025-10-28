@@ -168,15 +168,15 @@ bd.db
 			os.Exit(1)
 		}
 
-		// Set the issue prefix in config
-		ctx := context.Background()
-		if err := store.SetConfig(ctx, "issue_prefix", prefix); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix: %v\n", err)
-		_ = store.Close()
-		os.Exit(1)
+		// Set the issue prefix in config.yaml (source of truth)
+		if err := config.SetIssuePrefix(prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix in config.yaml: %v\n", err)
+			_ = store.Close()
+			os.Exit(1)
 		}
 
 		// Store the bd version in metadata (for version mismatch detection)
+		ctx := context.Background()
 		if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to store version metadata: %v\n", err)
 		// Non-fatal - continue anyway

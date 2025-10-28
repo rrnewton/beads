@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"encoding/json"
 	"os"
@@ -79,7 +80,7 @@ func testFreshCloneAutoImport(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 
@@ -183,7 +184,7 @@ func testDatabaseRemovalScenario(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 
@@ -263,7 +264,7 @@ func testLegacyFilenameSupport(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 
@@ -377,7 +378,7 @@ func testInitSafetyCheck(t *testing.T) {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"database/sql"
 	"os"
@@ -126,7 +127,7 @@ func TestMigrateIssueCountersTable(t *testing.T) {
 
 	// Step 5: Verify next auto-generated IDs are correct
 	// Set prefix to bd
-	err = store.SetConfig(ctx, "issue_prefix", "bd")
+	err = config.SetIssuePrefix("bd")
 	if err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestMigrateIssueCountersTableEmptyDB(t *testing.T) {
 	ctx := context.Background()
 	
 	// Set the issue prefix to "bd" for this test
-	err = store.SetConfig(ctx, "issue_prefix", "bd")
+	err = config.SetIssuePrefix("bd")
 	if err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
@@ -234,7 +235,7 @@ func TestMigrateIssueCountersTableIdempotent(t *testing.T) {
 	ctx := context.Background()
 	
 	// Set the issue prefix to "bd" for this test
-	err = store1.SetConfig(ctx, "issue_prefix", "bd")
+	err = config.SetIssuePrefix("bd")
 	if err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}

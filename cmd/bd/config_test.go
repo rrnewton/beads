@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -150,6 +151,11 @@ func TestConfigNamespaces(t *testing.T) {
 
 // setupTestDB creates a temporary test database
 func setupTestDB(t *testing.T) (*sqlite.SQLiteStorage, func()) {
+	// Initialize config package for tests
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+
 	tmpDir, err := os.MkdirTemp("", "bd-test-config-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -163,8 +169,7 @@ func setupTestDB(t *testing.T) (*sqlite.SQLiteStorage, func()) {
 	}
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		store.Close()
 		os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to set issue-prefix: %v", err)

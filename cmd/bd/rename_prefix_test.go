@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"os"
 	"path/filepath"
@@ -57,7 +58,7 @@ func TestRenamePrefixCommand(t *testing.T) {
 		actor = ""
 	}()
 
-	if err := testStore.SetConfig(ctx, "issue_prefix", "old"); err != nil {
+	if err := config.SetIssuePrefix("old"); err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
 
@@ -111,10 +112,7 @@ func TestRenamePrefixCommand(t *testing.T) {
 		t.Fatalf("renamePrefixInDB failed: %v", err)
 	}
 
-	newPrefix, err := testStore.GetConfig(ctx, "issue_prefix")
-	if err != nil {
-		t.Fatalf("Failed to get new prefix: %v", err)
-	}
+	newPrefix := config.GetIssuePrefix()
 	if newPrefix != "new" {
 		t.Errorf("Expected prefix 'new', got %q", newPrefix)
 	}
@@ -183,7 +181,7 @@ func TestRenamePrefixInDB(t *testing.T) {
 	store = testStore
 	actor = "test-actor"
 
-	if err := testStore.SetConfig(ctx, "issue_prefix", "old"); err != nil {
+	if err := config.SetIssuePrefix("old"); err != nil {
 		t.Fatalf("Failed to set config: %v", err)
 	}
 

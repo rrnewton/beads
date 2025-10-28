@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"github.com/steveyegge/beads/internal/config"
 	"context"
 	"crypto/sha256"
 	"fmt"
@@ -367,8 +368,8 @@ func RemapCollisions(ctx context.Context, s *SQLiteStorage, collisions []*Collis
 		oldID := collision.ID
 
 		// Allocate new ID using atomic counter
-		prefix, err := s.GetConfig(ctx, "issue_prefix")
-		if err != nil || prefix == "" {
+		prefix := config.GetIssuePrefix()
+		if prefix == "" {
 			prefix = "bd"
 		}
 		nextID, err := s.getNextIDForPrefix(ctx, prefix)
