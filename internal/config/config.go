@@ -106,12 +106,116 @@ func Initialize() error {
 			// Config file found but another error occurred
 			return fmt.Errorf("error reading config file: %w", err)
 		}
-		// Config file not found - this is ok, we'll use defaults
+		// Config file not found - create it if .beads directory exists
+		if err := createDefaultConfigIfNeeded(); err != nil {
+			log.Printf("Warning: failed to create default config.yaml: %v\n", err)
+		}
 	} else {
 		// Config file was found and read successfully - validate it
 		validateConfig()
 	}
 
+	return nil
+}
+
+// defaultConfigTemplate contains the default config.yaml with helpful comments
+const defaultConfigTemplate = `# Beads (bd) Configuration File
+# This file controls settings for your beads issue tracking project.
+#
+# Configuration precedence (highest to lowest):
+# 1. Command-line flags
+# 2. Environment variables (BD_* prefix)
+# 3. This config file
+# 4. Built-in defaults
+
+# Issue Prefix (REQUIRED)
+# The prefix used for all issue IDs in this project (e.g., "bd-123")
+# Set this during 'bd init', or manually edit it here.
+# Once set, use 'bd rename-prefix' to change it.
+issue-prefix: "issue"
+
+# Output Format
+# Set to true to output JSON instead of human-readable text
+# Can be overridden with --json flag or BD_JSON env var
+json: false
+
+# Daemon Mode
+# Set to true to disable background daemon for auto-export
+# Can be overridden with --no-daemon flag or BD_NO_DAEMON env var
+no-daemon: false
+
+# Auto-flush
+# Set to true to disable automatic flushing of changes
+# Can be overridden with --no-auto-flush flag or BD_NO_AUTO_FLUSH env var
+no-auto-flush: false
+
+# Auto-import
+# Set to true to disable automatic import on startup
+# Can be overridden with --no-auto-import flag or BD_NO_AUTO_IMPORT env var
+no-auto-import: false
+
+# Flush Debounce
+# How long to wait before flushing changes (prevents too-frequent writes)
+# Can be overridden with BEADS_FLUSH_DEBOUNCE env var
+flush-debounce: "30s"
+
+# Auto-start Daemon
+# Whether to automatically start the daemon if not running
+# Can be overridden with BEADS_AUTO_START_DAEMON env var
+auto-start-daemon: true
+
+# Database Path (optional)
+# Override the default database location (.beads/beads.db)
+# Can be overridden with --db flag or BD_DB env var
+# Leave empty to use default location
+db: ""
+
+# Actor (optional)
+# Default username for issue operations
+# Can be overridden with --actor flag or BD_ACTOR env var
+# If empty, uses git config user.name or system username
+actor: ""
+
+# For more configuration options and integration examples, see:
+# https://github.com/steveyegge/beads
+`
+
+// createDefaultConfigIfNeeded creates a default config.yaml in the .beads directory if one doesn't exist
+func createDefaultConfigIfNeeded() error {
+	// Find .beads directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	var beadsDir string
+	for dir := cwd; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		candidate := filepath.Join(dir, ".beads")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			beadsDir = candidate
+			break
+		}
+	}
+
+	if beadsDir == "" {
+		// No .beads directory found - don't create config
+		return nil
+	}
+
+	configPath := filepath.Join(beadsDir, "config.yaml")
+
+	// Check if config already exists
+	if _, err := os.Stat(configPath); err == nil {
+		// Config exists, don't overwrite
+		return nil
+	}
+
+	// Create config file with default template
+	if err := os.WriteFile(configPath, []byte(defaultConfigTemplate), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	log.Printf("Created default configuration file: %s\n", configPath)
 	return nil
 }
 
