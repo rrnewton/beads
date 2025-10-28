@@ -146,7 +146,7 @@ func TestExportImport(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := sqlite.New(dbPath)
+	store := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -155,9 +155,9 @@ func TestExportImport(t *testing.T) {
 	now := time.Now()
 
 	// Create test issues
-	h.createIssue("test-1", "First issue", "Description 1", types.StatusOpen, 1, types.TypeBug, "", nil)
-	h.createIssue("test-2", "Second issue", "Description 2", types.StatusInProgress, 2, types.TypeFeature, "alice", nil)
-	h.createIssue("test-3", "Third issue", "Description 3", types.StatusClosed, 3, types.TypeTask, "", &now)
+	h.createIssue("bd-1", "First issue", "Description 1", types.StatusOpen, 1, types.TypeBug, "", nil)
+	h.createIssue("bd-2", "Second issue", "Description 2", types.StatusInProgress, 2, types.TypeFeature, "alice", nil)
+	h.createIssue("bd-3", "Third issue", "Description 3", types.StatusClosed, 3, types.TypeTask, "", &now)
 
 	// Test export
 	t.Run("Export", func(t *testing.T) {
@@ -177,7 +177,7 @@ func TestExportImport(t *testing.T) {
 	t.Run("Import", func(t *testing.T) {
 		exported := h.searchIssues(types.IssueFilter{})
 		newDBPath := filepath.Join(tmpDir, "import-test.db")
-		newStore, err := sqlite.New(newDBPath)
+		newStore := newTestStore(t, newDBPath)
 		if err != nil {
 			t.Fatalf("Failed to create new storage: %v", err)
 		}
@@ -195,10 +195,10 @@ func TestExportImport(t *testing.T) {
 
 	// Test update on import
 	t.Run("Import Update", func(t *testing.T) {
-		issue := h.getIssue("test-1")
+		issue := h.getIssue("bd-1")
 		updates := map[string]interface{}{"title": "Updated title", "status": string(types.StatusClosed)}
 		h.updateIssue(issue.ID, updates)
-		updated := h.getIssue("test-1")
+		updated := h.getIssue("bd-1")
 		h.assertEqual("Updated title", updated.Title, "Title")
 		h.assertEqual(types.StatusClosed, updated.Status, "Status")
 	})
@@ -227,7 +227,7 @@ func TestExportEmpty(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "empty.db")
-	store, err := sqlite.New(dbPath)
+	store := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -247,8 +247,8 @@ func TestExportEmpty(t *testing.T) {
 
 func TestImportInvalidJSON(t *testing.T) {
 	invalidJSON := []string{
-		`{"id":"test-1"`,            // Incomplete JSON
-		`{"id":"test-1","title":}`,  // Invalid syntax
+		`{"id":"bd-1"`,            // Incomplete JSON
+		`{"id":"bd-1","title":}`,  // Invalid syntax
 		`not json at all`,           // Not JSON
 		`{"id":"","title":"No ID"}`, // Empty ID
 	}
@@ -275,13 +275,13 @@ func TestRoundTrip(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "original.db")
-	store, err := sqlite.New(dbPath)
+	store := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 
 	h := newExportImportHelper(t, store)
-	original := h.createFullIssue("test-1", 120)
+	original := h.createFullIssue("bd-1", 120)
 
 	// Export to JSONL
 	buf := h.encodeJSONL([]*types.Issue{original})

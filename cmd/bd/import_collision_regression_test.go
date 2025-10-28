@@ -32,10 +32,7 @@ func TestRemapCollisionsRemapsImportedNotExisting(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
+	store := newTestStore(t, dbPath)
 	defer store.Close()
 
 	ctx := context.Background()
@@ -201,10 +198,7 @@ func TestRemapCollisionsDoesNotUpdateNonexistentDependencies(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
+	store := newTestStore(t, dbPath)
 	defer store.Close()
 
 	ctx := context.Background()

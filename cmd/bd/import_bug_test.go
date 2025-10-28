@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -27,10 +26,7 @@ func TestImportReturnsCorrectCounts(t *testing.T) {
 	}
 
 	// Initialize database
-	store, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create store: %v", err)
-	}
+	store := newTestStore(t, dbPath)
 	defer store.Close()
 
 	ctx := context.Background()
@@ -38,7 +34,7 @@ func TestImportReturnsCorrectCounts(t *testing.T) {
 	// Create test issues to import
 	issues := make([]*types.Issue, 0, 5)
 	for i := 1; i <= 5; i++ {
-		id := fmt.Sprintf("test-%d", i)
+		id := fmt.Sprintf("bd-%d", i)
 		issues = append(issues, &types.Issue{
 			ID:          id,
 			Title:       fmt.Sprintf("Test Issue %d", i),

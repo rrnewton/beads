@@ -27,7 +27,7 @@ func TestImportSimpleCollision(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestImportMultipleCollisions(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestImportDependencyUpdates(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestImportTextReferenceUpdates(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -546,7 +546,7 @@ func TestImportChainDependencies(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -648,7 +648,7 @@ func TestImportPartialIDMatch(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -771,7 +771,7 @@ func TestImportExactMatch(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -836,7 +836,7 @@ func TestImportMixedScenario(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -922,7 +922,7 @@ func TestImportWithDependenciesInJSONL(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -989,7 +989,7 @@ func TestImportCounterSyncAfterHighID(t *testing.T) {
 	}()
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
