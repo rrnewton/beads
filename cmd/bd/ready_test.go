@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -19,10 +18,7 @@ func TestReadyWork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -30,7 +26,7 @@ func TestReadyWork(t *testing.T) {
 	// Create issues with different states
 	issues := []*types.Issue{
 		{
-			ID:        "test-1",
+			ID:        "bd-1",
 			Title:     "Ready task 1",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -38,7 +34,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-2",
+			ID:        "bd-2",
 			Title:     "Ready task 2",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -46,7 +42,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-3",
+			ID:        "bd-3",
 			Title:     "Blocked task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -54,7 +50,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-blocker",
+			ID:        "bd-blocker",
 			Title:     "Blocking task",
 			Status:    types.StatusOpen,
 			Priority:  0,
@@ -62,7 +58,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-closed",
+			ID:        "bd-closed",
 			Title:     "Closed task",
 			Status:    types.StatusClosed,
 			Priority:  2,
@@ -80,8 +76,8 @@ func TestReadyWork(t *testing.T) {
 
 	// Add dependency: test-3 depends on test-blocker
 	dep := &types.Dependency{
-		IssueID:     "test-3",
-		DependsOnID: "test-blocker",
+		IssueID:     "bd-3",
+		DependsOnID: "bd-blocker",
 		Type:        types.DepBlocks,
 		CreatedAt:   time.Now(),
 	}
@@ -102,11 +98,11 @@ func TestReadyWork(t *testing.T) {
 
 	// Check that test-3 is NOT in ready work
 	for _, issue := range ready {
-		if issue.ID == "test-3" {
-			t.Error("test-3 should not be in ready work (it's blocked)")
+		if issue.ID == "bd-3" {
+			t.Error("bd-3 should not be in ready work (it's blocked)")
 		}
-		if issue.ID == "test-closed" {
-			t.Error("test-closed should not be in ready work (it's closed)")
+		if issue.ID == "bd-closed" {
+			t.Error("bd-closed should not be in ready work (it's closed)")
 		}
 	}
 
@@ -147,10 +143,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -158,7 +151,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 	// Create issues with different assignees
 	issues := []*types.Issue{
 		{
-			ID:        "test-alice",
+			ID:        "bd-alice",
 			Title:     "Alice's task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -167,7 +160,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-bob",
+			ID:        "bd-bob",
 			Title:     "Bob's task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -176,7 +169,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "test-unassigned",
+			ID:        "bd-unassigned",
 			Title:     "Unassigned task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -231,17 +224,14 @@ func TestReadyWorkInProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqliteStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqliteStore := newTestStore(t, dbPath)
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
 	
 	// Create in-progress issue (should be in ready work)
 	issue := &types.Issue{
-		ID:        "test-wip",
+		ID:        "bd-wip",
 		Title:     "Work in progress",
 		Status:    types.StatusInProgress,
 		Priority:  1,
@@ -261,7 +251,7 @@ func TestReadyWorkInProgress(t *testing.T) {
 
 	found := false
 	for _, i := range ready {
-		if i.ID == "test-wip" {
+		if i.ID == "bd-wip" {
 			found = true
 			break
 		}

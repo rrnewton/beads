@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -17,10 +16,7 @@ func TestValidateMerge(t *testing.T) {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	testStore, err := sqlite.New(dbFile)
-	if err != nil {
-		t.Fatalf("Failed to create test storage: %v", err)
-	}
+	testStore := newTestStore(t, dbFile)
 	defer testStore.Close()
 
 	store = testStore
@@ -136,10 +132,7 @@ func TestValidateMergeMultipleSelfReferences(t *testing.T) {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	testStore, err := sqlite.New(dbFile)
-	if err != nil {
-		t.Fatalf("Failed to create test storage: %v", err)
-	}
+	testStore := newTestStore(t, dbFile)
 	defer testStore.Close()
 
 	store = testStore
@@ -159,7 +152,7 @@ func TestValidateMergeMultipleSelfReferences(t *testing.T) {
 	}
 
 	// Test merging multiple instances of same ID (should catch first one)
-	err = validateMerge("bd-10", []string{"bd-10", "bd-10"})
+	err := validateMerge("bd-10", []string{"bd-10", "bd-10"})
 	if err == nil {
 		t.Error("validateMerge() expected error for duplicate self-merge, got nil")
 	}
@@ -189,10 +182,7 @@ func TestPerformMergeIdempotent(t *testing.T) {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	testStore, err := sqlite.New(dbFile)
-	if err != nil {
-		t.Fatalf("Failed to create test storage: %v", err)
-	}
+	testStore := newTestStore(t, dbFile)
 	defer testStore.Close()
 
 	store = testStore
@@ -309,10 +299,7 @@ func TestPerformMergePartialRetry(t *testing.T) {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
 
-	testStore, err := sqlite.New(dbFile)
-	if err != nil {
-		t.Fatalf("Failed to create test storage: %v", err)
-	}
+	testStore := newTestStore(t, dbFile)
 	defer testStore.Close()
 
 	store = testStore
