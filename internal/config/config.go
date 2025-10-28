@@ -14,18 +14,32 @@ import (
 
 var v *viper.Viper
 
+// Config key constants - single source of truth for all configuration keys
+// Use these constants throughout the codebase instead of string literals
+const (
+	KeyJSON             = "json"
+	KeyNoDaemon         = "no-daemon"
+	KeyNoAutoFlush      = "no-auto-flush"
+	KeyNoAutoImport     = "no-auto-import"
+	KeyDB               = "db"
+	KeyActor            = "actor"
+	KeyIssuePrefix      = "issue-prefix"
+	KeyFlushDebounce    = "flush-debounce"
+	KeyAutoStartDaemon  = "auto-start-daemon"
+)
+
 // supportedKeys lists all valid configuration keys
 // This is used to validate config.yaml and warn about unsupported keys
 var supportedKeys = map[string]bool{
-	"json":              true,
-	"no-daemon":         true,
-	"no-auto-flush":     true,
-	"no-auto-import":    true,
-	"db":                true,
-	"actor":             true,
-	"issue-prefix":      true,
-	"flush-debounce":    true,
-	"auto-start-daemon": true,
+	KeyJSON:            true,
+	KeyNoDaemon:        true,
+	KeyNoAutoFlush:     true,
+	KeyNoAutoImport:    true,
+	KeyDB:              true,
+	KeyActor:           true,
+	KeyIssuePrefix:     true,
+	KeyFlushDebounce:   true,
+	KeyAutoStartDaemon: true,
 }
 
 // Initialize sets up the viper configuration singleton
@@ -83,23 +97,21 @@ func Initialize() error {
 	v.AutomaticEnv()
 
 	// Set defaults for all flags
-	v.SetDefault("json", false)
-	v.SetDefault("no-daemon", false)
-	v.SetDefault("no-auto-flush", false)
-	v.SetDefault("no-auto-import", false)
-	v.SetDefault("no-db", false)
-	v.SetDefault("db", "")
-	v.SetDefault("actor", "")
-	v.SetDefault("issue-prefix", "")
-	
+	v.SetDefault(KeyJSON, false)
+	v.SetDefault(KeyNoDaemon, false)
+	v.SetDefault(KeyNoAutoFlush, false)
+	v.SetDefault(KeyNoAutoImport, false)
+	v.SetDefault(KeyDB, "")
+	v.SetDefault(KeyActor, "")
+
 	// Additional environment variables (not prefixed with BD_)
 	// These are bound explicitly for backward compatibility
-	_ = v.BindEnv("flush-debounce", "BEADS_FLUSH_DEBOUNCE")
-	_ = v.BindEnv("auto-start-daemon", "BEADS_AUTO_START_DAEMON")
-	
+	_ = v.BindEnv(KeyFlushDebounce, "BEADS_FLUSH_DEBOUNCE")
+	_ = v.BindEnv(KeyAutoStartDaemon, "BEADS_AUTO_START_DAEMON")
+
 	// Set defaults for additional settings
-	v.SetDefault("flush-debounce", "30s")
-	v.SetDefault("auto-start-daemon", true)
+	v.SetDefault(KeyFlushDebounce, "30s")
+	v.SetDefault(KeyAutoStartDaemon, true)
 
 	// Read config file if it exists (don't error if not found)
 	if err := v.ReadInConfig(); err != nil {
@@ -343,7 +355,7 @@ func SetIssuePrefix(prefix string) error {
 	}
 
 	// Update issue-prefix
-	configData["issue-prefix"] = prefix
+	configData[KeyIssuePrefix] = prefix
 
 	// Write back to file
 	data, err := yaml.Marshal(configData)
@@ -357,7 +369,7 @@ func SetIssuePrefix(prefix string) error {
 
 	// Update in-memory viper configuration
 	if v != nil {
-		v.Set("issue-prefix", prefix)
+		v.Set(KeyIssuePrefix, prefix)
 	}
 
 	return nil
@@ -366,5 +378,5 @@ func SetIssuePrefix(prefix string) error {
 // GetIssuePrefix returns the issue-prefix from config.yaml
 // This is the canonical source of truth for the project's issue prefix
 func GetIssuePrefix() string {
-	return GetString("issue-prefix")
+	return GetString(KeyIssuePrefix)
 }
