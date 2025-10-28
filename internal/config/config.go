@@ -22,7 +22,6 @@ var supportedKeys = map[string]bool{
 	"no-auto-import":    true,
 	"db":                true,
 	"actor":             true,
-	"issue_prefix":      true, // Legacy, will be migrated to issue-prefix
 	"issue-prefix":      true,
 	"flush-debounce":    true,
 	"auto-start-daemon": true,

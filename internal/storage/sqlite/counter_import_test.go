@@ -21,7 +21,7 @@ func TestCounterSyncAfterImport(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Simulate "test pollution" scenario: manually set counter to high value
@@ -99,7 +99,7 @@ func TestCounterNotSyncedWithoutExplicitSync(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Manually set counter to high value (stale counter)
