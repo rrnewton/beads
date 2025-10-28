@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   test:
@@ -75,7 +73,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.62
+          version: latest
           args: --timeout=5m
   # test-nix:
   #   name: Test Nix Flake

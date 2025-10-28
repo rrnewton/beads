@@ -254,7 +254,7 @@ This command:
 					var response string
 					_, _ = fmt.Scanln(&response)
 					if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-						fmt.Println("Cleanup cancelled")
+						fmt.Println("Cleanup canceled")
 						return
 					}
 				}
@@ -461,7 +461,7 @@ func handleUpdateRepoID(dryRun bool, autoYes bool) {
 		var response string
 		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			fmt.Println("Cancelled")
+			fmt.Println("Canceled")
 			return
 		}
 	}

@@ -12,6 +12,21 @@ import (
 
 var v *viper.Viper
 
+// supportedKeys lists all valid configuration keys
+// This is used to validate config.yaml and warn about unsupported keys
+var supportedKeys = map[string]bool{
+	"json":              true,
+	"no-daemon":         true,
+	"no-auto-flush":     true,
+	"no-auto-import":    true,
+	"db":                true,
+	"actor":             true,
+	"issue_prefix":      true, // Legacy, will be migrated to issue-prefix
+	"issue-prefix":      true,
+	"flush-debounce":    true,
+	"auto-start-daemon": true,
+}
+
 // Initialize sets up the viper configuration singleton
 // Should be called once at application startup
 func Initialize() error {
@@ -92,9 +107,36 @@ func Initialize() error {
 			return fmt.Errorf("error reading config file: %w", err)
 		}
 		// Config file not found - this is ok, we'll use defaults
+	} else {
+		// Config file was found and read successfully - validate it
+		validateConfig()
 	}
 
 	return nil
+}
+
+// validateConfig checks for unsupported keys in the config file
+// and issues warnings to help users identify typos or obsolete settings
+func validateConfig() {
+	if v == nil {
+		return
+	}
+
+	configFile := v.ConfigFileUsed()
+	if configFile == "" {
+		// No config file was loaded
+		return
+	}
+
+	// Get all keys from the config file
+	allSettings := v.AllSettings()
+
+	// Check each key against the supported list
+	for key := range allSettings {
+		if !supportedKeys[key] {
+			fmt.Fprintf(os.Stderr, "Warning: unsupported configuration key '%s' in %s - this setting will be ignored\n", key, configFile)
+		}
+	}
 }
 
 // GetString retrieves a string configuration value
