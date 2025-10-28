@@ -113,7 +113,7 @@ func (fw *FileWatcher) Start(ctx context.Context, log daemonLogger) {
 				// Handle JSONL removal/rename (e.g., git checkout)
 				if event.Name == fw.jsonlPath && (event.Op&fsnotify.Remove != 0 || event.Op&fsnotify.Rename != 0) {
 					log.log("JSONL removed/renamed, re-establishing watch")
-					fw.watcher.Remove(fw.jsonlPath)
+					_ = fw.watcher.Remove(fw.jsonlPath) // Best effort - file already removed
 					// Brief wait for file to be recreated
 					time.Sleep(100 * time.Millisecond)
 					if err := fw.watcher.Add(fw.jsonlPath); err != nil {
