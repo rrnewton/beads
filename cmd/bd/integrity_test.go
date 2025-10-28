@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -20,10 +19,7 @@ func TestValidatePreExport(t *testing.T) {
 		jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 		// Create empty database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Create non-empty JSONL file
@@ -34,7 +30,7 @@ func TestValidatePreExport(t *testing.T) {
 		}
 
 		// Should fail validation
-		err = validatePreExport(ctx, store, jsonlPath)
+		err := validatePreExport(ctx, store, jsonlPath)
 		if err == nil {
 			t.Error("Expected error for empty DB over non-empty JSONL, got nil")
 		}
@@ -47,10 +43,7 @@ func TestValidatePreExport(t *testing.T) {
 		jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 		// Create database with issues
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Add an issue
@@ -74,7 +67,7 @@ func TestValidatePreExport(t *testing.T) {
 		}
 
 		// Should pass validation
-		err = validatePreExport(ctx, store, jsonlPath)
+		err := validatePreExport(ctx, store, jsonlPath)
 		if err != nil {
 			t.Errorf("Expected no error, got: %v", err)
 		}
@@ -87,16 +80,13 @@ func TestValidatePreExport(t *testing.T) {
 		jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 		// Create empty database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// JSONL doesn't exist
 
 		// Should pass validation (new repo scenario)
-		err = validatePreExport(ctx, store, jsonlPath)
+		err := validatePreExport(ctx, store, jsonlPath)
 		if err != nil {
 			t.Errorf("Expected no error for empty DB with no JSONL, got: %v", err)
 		}
@@ -109,10 +99,7 @@ func TestValidatePreExport(t *testing.T) {
 		jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 		// Create empty database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Create corrupt/unreadable JSONL file with content
@@ -122,7 +109,7 @@ func TestValidatePreExport(t *testing.T) {
 		}
 
 		// Should fail validation (can't verify JSONL content, DB is empty, file has content)
-		err = validatePreExport(ctx, store, jsonlPath)
+		err := validatePreExport(ctx, store, jsonlPath)
 		if err == nil {
 			t.Error("Expected error for empty DB over unreadable non-empty JSONL, got nil")
 		}
@@ -161,10 +148,7 @@ func TestCountDBIssues(t *testing.T) {
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Initially 0
@@ -211,10 +195,7 @@ func TestCheckOrphanedDeps(t *testing.T) {
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Create two issues
@@ -272,10 +253,7 @@ func TestCheckOrphanedDeps(t *testing.T) {
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store, err := sqlite.New(dbPath)
-		if err != nil {
-			t.Fatalf("Failed to create store: %v", err)
-		}
+		store := newTestStore(t, dbPath)
 		defer store.Close()
 
 		// Create two issues
