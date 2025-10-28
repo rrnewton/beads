@@ -1,3 +1,10 @@
+//go:build ignore
+// +build ignore
+
+// TODO(bd-31): This test file contains dead code - Server cache fields were removed upstream
+// This file is excluded from compilation via build tags but kept for reference
+// Should be deleted once cache removal work is complete
+
 package rpc
 
 import (

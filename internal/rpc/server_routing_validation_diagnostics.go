@@ -78,7 +78,9 @@ func (s *Server) validateDatabaseBinding(req *Request) error {
 		return nil
 	}
 
-	// Local daemon always uses single storage
+	// For multi-database daemons: If a cwd is provided, verify the client expects
+	// the database that would be selected for that cwd
+	// Note: Multi-database support removed, always use default storage
 	daemonDB := s.storage.Path()
 
 	// Normalize both paths for comparison (resolve symlinks, clean paths)
@@ -331,9 +333,7 @@ func (s *Server) handleHealth(req *Request) Response {
 }
 
 func (s *Server) handleMetrics(_ *Request) Response {
-	snapshot := s.metrics.Snapshot(
-		int(atomic.LoadInt32(&s.activeConns)),
-	)
+	snapshot := s.metrics.Snapshot(int(atomic.LoadInt32(&s.activeConns)))
 
 	data, _ := json.Marshal(snapshot)
 	return Response{
