@@ -20,7 +20,6 @@ func TestValidatePreExport(t *testing.T) {
 
 		// Create empty database
 		store := newTestStore(t, dbPath)
-		defer store.Close()
 
 		// Create non-empty JSONL file
 		jsonlContent := `{"id":"bd-1","title":"Test","status":"open","priority":1}
@@ -43,10 +42,10 @@ func TestValidatePreExport(t *testing.T) {
 		jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 		// Create database with issues
-		store := newTestStore(t, dbPath)
-		defer store.Close()
+		store := newTestStoreWithPrefix(t, dbPath, "bd")
 
 		// Add an issue
+		ctx := context.Background()
 		issue := &types.Issue{
 			ID:          "bd-1",
 			Title:       "Test",
@@ -81,7 +80,6 @@ func TestValidatePreExport(t *testing.T) {
 
 		// Create empty database
 		store := newTestStore(t, dbPath)
-		defer store.Close()
 
 		// JSONL doesn't exist
 
@@ -100,7 +98,6 @@ func TestValidatePreExport(t *testing.T) {
 
 		// Create empty database
 		store := newTestStore(t, dbPath)
-		defer store.Close()
 
 		// Create corrupt/unreadable JSONL file with content
 		corruptContent := `{"id":"bd-1","title":INVALID JSON`
@@ -140,17 +137,15 @@ func TestValidatePostImport(t *testing.T) {
 }
 
 func TestCountDBIssues(t *testing.T) {
-	ctx := context.Background()
-
 	t.Run("count issues in database", func(t *testing.T) {
 		// Create temp directory
 		tmpDir := t.TempDir()
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store := newTestStore(t, dbPath)
-		defer store.Close()
+		store := newTestStoreWithPrefix(t, dbPath, "bd")
 
+		ctx := context.Background()
 		// Initially 0
 		count, err := countDBIssues(ctx, store)
 		if err != nil {
@@ -187,17 +182,15 @@ func TestCountDBIssues(t *testing.T) {
 }
 
 func TestCheckOrphanedDeps(t *testing.T) {
-	ctx := context.Background()
-
 	t.Run("function executes without error", func(t *testing.T) {
 		// Create temp directory
 		tmpDir := t.TempDir()
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store := newTestStore(t, dbPath)
-		defer store.Close()
+		store := newTestStoreWithPrefix(t, dbPath, "bd")
 
+		ctx := context.Background()
 		// Create two issues
 		issue1 := &types.Issue{
 			ID:          "bd-1",
@@ -253,9 +246,9 @@ func TestCheckOrphanedDeps(t *testing.T) {
 		dbPath := filepath.Join(tmpDir, "test.db")
 
 		// Create database
-		store := newTestStore(t, dbPath)
-		defer store.Close()
+		store := newTestStoreWithPrefix(t, dbPath, "bd")
 
+		ctx := context.Background()
 		// Create two issues
 		issue1 := &types.Issue{
 			ID:          "bd-1",

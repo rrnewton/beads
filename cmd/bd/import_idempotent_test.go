@@ -229,11 +229,7 @@ func TestIdempotentImportNoTimestampChurn(t *testing.T) {
 	jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 	// Create store
-	testStore := newTestStore(t, dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create storage: %v", err)
-	}
-	defer testStore.Close()
+	testStore := newTestStoreWithPrefix(t, dbPath, "bd")
 
 	store = testStore
 	storeMutex.Lock()
@@ -315,11 +311,7 @@ func TestImportMultipleUnchangedIssues(t *testing.T) {
 	jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
 
 	// Create store
-	testStore := newTestStore(t, dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create storage: %v", err)
-	}
-	defer testStore.Close()
+	testStore := newTestStoreWithPrefix(t, dbPath, "bd")
 
 	store = testStore
 	storeMutex.Lock()

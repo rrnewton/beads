@@ -32,8 +32,7 @@ func TestRemapCollisionsRemapsImportedNotExisting(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store := newTestStore(t, dbPath)
-	defer store.Close()
+	store := newTestStoreWithPrefix(t, dbPath, "bd")
 
 	ctx := context.Background()
 
@@ -198,8 +197,7 @@ func TestRemapCollisionsDoesNotUpdateNonexistentDependencies(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store := newTestStore(t, dbPath)
-	defer store.Close()
+	store := newTestStoreWithPrefix(t, dbPath, "bd")
 
 	ctx := context.Background()
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,20 +12,13 @@ import (
 func TestReadyWork(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		t.Fatal(err)
-	}
-
 	sqliteStore := newTestStore(t, dbPath)
-	defer sqliteStore.Close()
-
 	ctx := context.Background()
 	
 	// Create issues with different states
 	issues := []*types.Issue{
 		{
-			ID:        "bd-1",
+			ID:        "test-1",
 			Title:     "Ready task 1",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -34,7 +26,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-2",
+			ID:        "test-2",
 			Title:     "Ready task 2",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -42,7 +34,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-3",
+			ID:        "test-3",
 			Title:     "Blocked task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -50,7 +42,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-blocker",
+			ID:        "test-blocker",
 			Title:     "Blocking task",
 			Status:    types.StatusOpen,
 			Priority:  0,
@@ -58,7 +50,7 @@ func TestReadyWork(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-closed",
+			ID:        "test-closed",
 			Title:     "Closed task",
 			Status:    types.StatusClosed,
 			Priority:  2,
@@ -76,8 +68,8 @@ func TestReadyWork(t *testing.T) {
 
 	// Add dependency: test-3 depends on test-blocker
 	dep := &types.Dependency{
-		IssueID:     "bd-3",
-		DependsOnID: "bd-blocker",
+		IssueID:     "test-3",
+		DependsOnID: "test-blocker",
 		Type:        types.DepBlocks,
 		CreatedAt:   time.Now(),
 	}
@@ -98,11 +90,11 @@ func TestReadyWork(t *testing.T) {
 
 	// Check that test-3 is NOT in ready work
 	for _, issue := range ready {
-		if issue.ID == "bd-3" {
-			t.Error("bd-3 should not be in ready work (it's blocked)")
+		if issue.ID == "test-3" {
+			t.Error("test-3 should not be in ready work (it's blocked)")
 		}
-		if issue.ID == "bd-closed" {
-			t.Error("bd-closed should not be in ready work (it's closed)")
+		if issue.ID == "test-closed" {
+			t.Error("test-closed should not be in ready work (it's closed)")
 		}
 	}
 
@@ -138,20 +130,13 @@ func TestReadyWork(t *testing.T) {
 func TestReadyWorkWithAssignee(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		t.Fatal(err)
-	}
-
 	sqliteStore := newTestStore(t, dbPath)
-	defer sqliteStore.Close()
-
 	ctx := context.Background()
 	
 	// Create issues with different assignees
 	issues := []*types.Issue{
 		{
-			ID:        "bd-alice",
+			ID:        "test-alice",
 			Title:     "Alice's task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -160,7 +145,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-bob",
+			ID:        "test-bob",
 			Title:     "Bob's task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -169,7 +154,7 @@ func TestReadyWorkWithAssignee(t *testing.T) {
 			CreatedAt: time.Now(),
 		},
 		{
-			ID:        "bd-unassigned",
+			ID:        "test-unassigned",
 			Title:     "Unassigned task",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -219,19 +204,12 @@ func TestReadyCommandInit(t *testing.T) {
 func TestReadyWorkInProgress(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		t.Fatal(err)
-	}
-
 	sqliteStore := newTestStore(t, dbPath)
-	defer sqliteStore.Close()
-
 	ctx := context.Background()
 	
 	// Create in-progress issue (should be in ready work)
 	issue := &types.Issue{
-		ID:        "bd-wip",
+		ID:        "test-wip",
 		Title:     "Work in progress",
 		Status:    types.StatusInProgress,
 		Priority:  1,
@@ -251,7 +229,7 @@ func TestReadyWorkInProgress(t *testing.T) {
 
 	found := false
 	for _, i := range ready {
-		if i.ID == "bd-wip" {
+		if i.ID == "test-wip" {
 			found = true
 			break
 		}

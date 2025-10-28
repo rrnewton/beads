@@ -1,46 +1,143 @@
-package main
+package importer
 
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
+	"github.com/steveyegge/beads/internal/utils"
 )
 
-// Phase 1: Get or create SQLite store for import
-func getOrCreateStore(_ context.Context, dbPath string, store storage.Storage) (*sqlite.SQLiteStorage, bool, error) {
-	var sqliteStore *sqlite.SQLiteStorage
-	var needCloseStore bool
+// Options contains import configuration
+type Options struct {
+	ResolveCollisions    bool // Auto-resolve collisions by remapping to new IDs
+	DryRun               bool // Preview changes without applying them
+	SkipUpdate           bool // Skip updating existing issues (create-only mode)
+	Strict               bool // Fail on any error (dependencies, labels, etc.)
+	RenameOnImport       bool // Rename imported issues to match database prefix
+	SkipPrefixValidation bool // Skip prefix validation (for auto-import)
+}
 
+// Result contains statistics about the import operation
+type Result struct {
+	Created          int               // New issues created
+	Updated          int               // Existing issues updated
+	Unchanged        int               // Existing issues that matched exactly (idempotent)
+	Skipped          int               // Issues skipped (duplicates, errors)
+	Collisions       int               // Collisions detected
+	IDMapping        map[string]string // Mapping of remapped IDs (old -> new)
+	CollisionIDs     []string          // IDs that collided
+	PrefixMismatch   bool              // Prefix mismatch detected
+	ExpectedPrefix   string            // Database configured prefix
+	MismatchPrefixes map[string]int    // Map of mismatched prefixes to count
+}
+
+// ImportIssues handles the core import logic used by both manual and auto-import.
+// This function:
+// - Works with existing storage or opens direct SQLite connection if needed
+// - Detects and handles collisions
+// - Imports issues, dependencies, labels, and comments
+// - Returns detailed results
+//
+// The caller is responsible for:
+// - Reading and parsing JSONL into issues slice
+// - Displaying results to the user
+// - Setting metadata (e.g., last_import_hash)
+//
+// Parameters:
+// - ctx: Context for cancellation
+// - dbPath: Path to SQLite database file
+// - store: Existing storage instance (can be nil for direct mode)
+// - issues: Parsed issues from JSONL
+// - opts: Import options
+func ImportIssues(ctx context.Context, dbPath string, store storage.Storage, issues []*types.Issue, opts Options) (*Result, error) {
+	result := &Result{
+		IDMapping:        make(map[string]string),
+		MismatchPrefixes: make(map[string]int),
+	}
+
+	// Get or create SQLite store
+	sqliteStore, needCloseStore, err := getOrCreateStore(ctx, dbPath, store)
+	if err != nil {
+		return nil, err
+	}
+	if needCloseStore {
+		defer func() { _ = sqliteStore.Close() }()
+	}
+
+	// Check and handle prefix mismatches
+	if err := handlePrefixMismatch(ctx, sqliteStore, issues, opts, result); err != nil {
+		return result, err
+	}
+
+	// Detect and resolve collisions
+	issues, err = handleCollisions(ctx, sqliteStore, issues, opts, result)
+	if err != nil {
+		return result, err
+	}
+	if opts.DryRun && result.Collisions == 0 {
+		return result, nil
+	}
+
+	// Upsert issues (create new or update existing)
+	if err := upsertIssues(ctx, sqliteStore, issues, opts, result); err != nil {
+		return nil, err
+	}
+
+	// Import dependencies
+	if err := importDependencies(ctx, sqliteStore, issues, opts); err != nil {
+		return nil, err
+	}
+
+	// Import labels
+	if err := importLabels(ctx, sqliteStore, issues, opts); err != nil {
+		return nil, err
+	}
+
+	// Import comments
+	if err := importComments(ctx, sqliteStore, issues, opts); err != nil {
+		return nil, err
+	}
+
+	// Checkpoint WAL to update main .db file timestamp
+	// This ensures staleness detection sees the database as fresh
+	if err := sqliteStore.CheckpointWAL(ctx); err != nil {
+		// Non-fatal - just log warning
+		fmt.Fprintf(os.Stderr, "Warning: failed to checkpoint WAL: %v\n", err)
+	}
+
+	return result, nil
+}
+
+// getOrCreateStore returns an existing storage or creates a new one
+func getOrCreateStore(ctx context.Context, dbPath string, store storage.Storage) (*sqlite.SQLiteStorage, bool, error) {
 	if store != nil {
-		// Direct mode - try to use existing store
-		var ok bool
-		sqliteStore, ok = store.(*sqlite.SQLiteStorage)
+		sqliteStore, ok := store.(*sqlite.SQLiteStorage)
 		if !ok {
 			return nil, false, fmt.Errorf("import requires SQLite storage backend")
 		}
-	} else {
-		// Daemon mode - open direct connection for import
-		if dbPath == "" {
-			return nil, false, fmt.Errorf("database path not set")
-		}
-		var err error
-		sqliteStore, err = sqlite.New(dbPath)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to open database: %w", err)
-		}
-		needCloseStore = true
+		return sqliteStore, false, nil
 	}
 
-	return sqliteStore, needCloseStore, nil
+	// Open direct connection for daemon mode
+	if dbPath == "" {
+		return nil, false, fmt.Errorf("database path not set")
+	}
+	sqliteStore, err := sqlite.New(dbPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	return sqliteStore, true, nil
 }
 
-// Phase 2: Check and handle prefix mismatches
-func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
+// handlePrefixMismatch checks and handles prefix mismatches
+func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options, result *Result) error {
 	configuredPrefix, err := sqliteStore.GetConfig(ctx, "issue_prefix")
 	if err != nil {
 		return fmt.Errorf("failed to get configured prefix: %w", err)
@@ -58,7 +155,7 @@ func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage
 
 	// Analyze prefixes in imported issues
 	for _, issue := range issues {
-		prefix := extractPrefix(issue.ID)
+		prefix := utils.ExtractIssuePrefix(issue.ID)
 		if prefix != configuredPrefix {
 			result.PrefixMismatch = true
 			result.MismatchPrefixes[prefix]++
@@ -67,12 +164,12 @@ func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage
 
 	// If prefix mismatch detected and not handling it, return error or warning
 	if result.PrefixMismatch && !opts.RenameOnImport && !opts.DryRun && !opts.SkipPrefixValidation {
-		return fmt.Errorf("prefix mismatch detected: database uses '%s-' but found issues with prefixes: %v (use --rename-on-import to automatically fix)", configuredPrefix, getPrefixList(result.MismatchPrefixes))
+		return fmt.Errorf("prefix mismatch detected: database uses '%s-' but found issues with prefixes: %v (use --rename-on-import to automatically fix)", configuredPrefix, GetPrefixList(result.MismatchPrefixes))
 	}
 
 	// Handle rename-on-import if requested
 	if result.PrefixMismatch && opts.RenameOnImport && !opts.DryRun {
-		if err := renameImportedIssuePrefixes(issues, configuredPrefix); err != nil {
+		if err := RenameImportedIssuePrefixes(issues, configuredPrefix); err != nil {
 			return fmt.Errorf("failed to rename prefixes: %w", err)
 		}
 		// After renaming, clear the mismatch flags since we fixed them
@@ -83,8 +180,8 @@ func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage
 	return nil
 }
 
-// Phase 3: Detect and resolve collisions
-func handleCollisions(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions, result *ImportResult) ([]*types.Issue, error) {
+// handleCollisions detects and resolves ID collisions
+func handleCollisions(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options, result *Result) ([]*types.Issue, error) {
 	collisionResult, err := sqlite.DetectCollisions(ctx, sqliteStore, issues)
 	if err != nil {
 		return nil, fmt.Errorf("collision detection failed: %w", err)
@@ -98,12 +195,10 @@ func handleCollisions(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, is
 	// Handle collisions
 	if len(collisionResult.Collisions) > 0 {
 		if opts.DryRun {
-			// In dry-run mode, just return collision info
 			return issues, nil
 		}
 
 		if !opts.ResolveCollisions {
-			// Default behavior: fail on collision
 			return nil, fmt.Errorf("collision detected for issues: %v (use --resolve-collisions to auto-resolve)", result.CollisionIDs)
 		}
 
@@ -142,19 +237,17 @@ func handleCollisions(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, is
 	}
 
 	if opts.DryRun {
-		// No collisions in dry-run mode
 		result.Created = len(collisionResult.NewIssues)
-		// bd-88: ExactMatches are unchanged issues (idempotent), not updates
 		result.Unchanged = len(collisionResult.ExactMatches)
 	}
 
 	return issues, nil
 }
 
-// Phase 4: Upsert issues (create new or update existing)
-func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions, result *ImportResult) error {
+// upsertIssues creates new issues or updates existing ones
+func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options, result *Result) error {
 	var newIssues []*types.Issue
-	seenNew := make(map[string]int) // Track duplicates within import batch
+	seenNew := make(map[string]int)
 
 	for _, issue := range issues {
 		// Check if issue exists in DB
@@ -193,14 +286,13 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 				updates["external_ref"] = nil
 			}
 
-			// bd-88: Only update if data actually changed (prevents timestamp churn)
-			if issueDataChanged(existing, updates) {
+			// Only update if data actually changed
+			if IssueDataChanged(existing, updates) {
 				if err := sqliteStore.UpdateIssue(ctx, issue.ID, updates, "import"); err != nil {
 					return fmt.Errorf("error updating issue %s: %w", issue.ID, err)
 				}
 				result.Updated++
 			} else {
-				// bd-88: Track unchanged issues separately for accurate reporting
 				result.Unchanged++
 			}
 		} else {
@@ -233,8 +325,8 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 	return nil
 }
 
-// Phase 5: Import dependencies
-func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions) error {
+// importDependencies imports dependency relationships
+func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options) error {
 	for _, issue := range issues {
 		if len(issue.Dependencies) == 0 {
 			continue
@@ -265,7 +357,6 @@ func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, 
 				if opts.Strict {
 					return fmt.Errorf("error adding dependency %s → %s: %w", dep.IssueID, dep.DependsOnID, err)
 				}
-				// Non-strict mode: just skip this dependency
 				continue
 			}
 		}
@@ -274,8 +365,8 @@ func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, 
 	return nil
 }
 
-// Phase 6: Import labels
-func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions) error {
+// importLabels imports labels for issues
+func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options) error {
 	for _, issue := range issues {
 		if len(issue.Labels) == 0 {
 			continue
@@ -299,7 +390,6 @@ func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 					if opts.Strict {
 						return fmt.Errorf("error adding label %s to %s: %w", label, issue.ID, err)
 					}
-					// Non-strict mode: skip this label
 					continue
 				}
 			}
@@ -309,8 +399,8 @@ func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 	return nil
 }
 
-// Phase 7: Import comments
-func importComments(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts ImportOptions) error {
+// importComments imports comments for issues
+func importComments(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options) error {
 	for _, issue := range issues {
 		if len(issue.Comments) == 0 {
 			continue
@@ -323,7 +413,6 @@ func importComments(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issu
 		}
 
 		// Build a set of existing comments (by author+normalized text)
-		// Note: We ignore CreatedAt since AddIssueComment generates its own timestamp
 		existingComments := make(map[string]bool)
 		for _, c := range currentComments {
 			key := fmt.Sprintf("%s:%s", c.Author, strings.TrimSpace(c.Text))
@@ -338,7 +427,6 @@ func importComments(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issu
 					if opts.Strict {
 						return fmt.Errorf("error adding comment to %s: %w", issue.ID, err)
 					}
-					// Non-strict mode: skip this comment
 					continue
 				}
 			}
@@ -350,15 +438,7 @@ func importComments(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issu
 
 // Helper functions
 
-func extractPrefix(issueID string) string {
-	parts := strings.SplitN(issueID, "-", 2)
-	if len(parts) < 2 {
-		return "" // No prefix found
-	}
-	return parts[0]
-}
-
-func getPrefixList(prefixes map[string]int) []string {
+func GetPrefixList(prefixes map[string]int) []string {
 	var result []string
 	keys := make([]string, 0, len(prefixes))
 	for k := range prefixes {

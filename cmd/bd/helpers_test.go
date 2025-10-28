@@ -2,44 +2,10 @@ package main
 
 import (
 	"testing"
+
+	"github.com/steveyegge/beads/internal/importer"
+	"github.com/steveyegge/beads/internal/utils"
 )
-
-func TestIsBoundary(t *testing.T) {
-	tests := []struct {
-		input    byte
-		expected bool
-	}{
-		{' ', true},
-		{'\t', true},
-		{'\n', true},
-		{'\r', true},
-		{'-', false}, // hyphen is part of issue IDs
-		{'_', true},
-		{'(', true},
-		{')', true},
-		{'[', true},
-		{']', true},
-		{'{', true},
-		{'}', true},
-		{',', true},
-		{'.', true},
-		{':', true},
-		{';', true},
-		{'a', false}, // lowercase letters are part of issue IDs
-		{'z', false},
-		{'A', true},  // uppercase is a boundary
-		{'Z', true},  // uppercase is a boundary
-		{'0', false}, // digits are part of issue IDs
-		{'9', false},
-	}
-
-	for _, tt := range tests {
-		result := isBoundary(tt.input)
-		if result != tt.expected {
-			t.Errorf("isBoundary(%q) = %v, want %v", tt.input, result, tt.expected)
-		}
-	}
-}
 
 func TestIsNumeric(t *testing.T) {
 	tests := []struct {
@@ -82,9 +48,9 @@ func TestExtractPrefix(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := extractPrefix(tt.input)
+		result := utils.ExtractIssuePrefix(tt.input)
 		if result != tt.expected {
-			t.Errorf("extractPrefix(%q) = %q, want %q", tt.input, result, tt.expected)
+			t.Errorf("ExtractIssuePrefix(%q) = %q, want %q", tt.input, result, tt.expected)
 		}
 	}
 }
@@ -96,7 +62,7 @@ func TestGetPrefixList(t *testing.T) {
 		"test":   1,
 	}
 	
-	result := getPrefixList(prefixMap)
+	result := importer.GetPrefixList(prefixMap)
 	
 	// Should have 3 entries
 	if len(result) != 3 {

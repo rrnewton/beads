@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -134,30 +133,17 @@ func (h *exportImportHelper) validateJSONLines(buf *bytes.Buffer, expectedCount 
 }
 
 func TestExportImport(t *testing.T) {
-	// Create temp directory for test database
-	tmpDir, err := os.MkdirTemp("", "bd-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			t.Logf("Warning: cleanup failed: %v", err)
-		}
-	}()
-
+	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store := newTestStore(t, dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create storage: %v", err)
-	}
+	store := newTestStoreWithPrefix(t, dbPath, "test")
 
 	h := newExportImportHelper(t, store)
 	now := time.Now()
 
 	// Create test issues
-	h.createIssue("bd-1", "First issue", "Description 1", types.StatusOpen, 1, types.TypeBug, "", nil)
-	h.createIssue("bd-2", "Second issue", "Description 2", types.StatusInProgress, 2, types.TypeFeature, "alice", nil)
-	h.createIssue("bd-3", "Third issue", "Description 3", types.StatusClosed, 3, types.TypeTask, "", &now)
+	h.createIssue("test-1", "First issue", "Description 1", types.StatusOpen, 1, types.TypeBug, "", nil)
+	h.createIssue("test-2", "Second issue", "Description 2", types.StatusInProgress, 2, types.TypeFeature, "alice", nil)
+	h.createIssue("test-3", "Third issue", "Description 3", types.StatusClosed, 3, types.TypeTask, "", &now)
 
 	// Test export
 	t.Run("Export", func(t *testing.T) {
@@ -177,10 +163,7 @@ func TestExportImport(t *testing.T) {
 	t.Run("Import", func(t *testing.T) {
 		exported := h.searchIssues(types.IssueFilter{})
 		newDBPath := filepath.Join(tmpDir, "import-test.db")
-		newStore := newTestStore(t, newDBPath)
-		if err != nil {
-			t.Fatalf("Failed to create new storage: %v", err)
-		}
+		newStore := newTestStoreWithPrefix(t, newDBPath, "test")
 		newHelper := newExportImportHelper(t, newStore)
 		for _, issue := range exported {
 			newHelper.createIssue(issue.ID, issue.Title, issue.Description, issue.Status, issue.Priority, issue.IssueType, issue.Assignee, issue.ClosedAt)
@@ -195,10 +178,10 @@ func TestExportImport(t *testing.T) {
 
 	// Test update on import
 	t.Run("Import Update", func(t *testing.T) {
-		issue := h.getIssue("bd-1")
+		issue := h.getIssue("test-1")
 		updates := map[string]interface{}{"title": "Updated title", "status": string(types.StatusClosed)}
 		h.updateIssue(issue.ID, updates)
-		updated := h.getIssue("bd-1")
+		updated := h.getIssue("test-1")
 		h.assertEqual("Updated title", updated.Title, "Title")
 		h.assertEqual(types.StatusClosed, updated.Status, "Status")
 	})
@@ -216,22 +199,9 @@ func TestExportImport(t *testing.T) {
 }
 
 func TestExportEmpty(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "bd-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			t.Logf("Warning: cleanup failed: %v", err)
-		}
-	}()
-
+	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "empty.db")
 	store := newTestStore(t, dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create storage: %v", err)
-	}
-
 	ctx := context.Background()
 
 	// Export from empty database
@@ -247,8 +217,8 @@ func TestExportEmpty(t *testing.T) {
 
 func TestImportInvalidJSON(t *testing.T) {
 	invalidJSON := []string{
-		`{"id":"bd-1"`,            // Incomplete JSON
-		`{"id":"bd-1","title":}`,  // Invalid syntax
+		`{"id":"test-1"`,            // Incomplete JSON
+		`{"id":"test-1","title":}`,  // Invalid syntax
 		`not json at all`,           // Not JSON
 		`{"id":"","title":"No ID"}`, // Empty ID
 	}
@@ -263,25 +233,11 @@ func TestImportInvalidJSON(t *testing.T) {
 }
 
 func TestRoundTrip(t *testing.T) {
-	// Create original database
-	tmpDir, err := os.MkdirTemp("", "bd-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			t.Logf("Warning: cleanup failed: %v", err)
-		}
-	}()
-
+	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "original.db")
-	store := newTestStore(t, dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create storage: %v", err)
-	}
-
+	store := newTestStoreWithPrefix(t, dbPath, "test")
 	h := newExportImportHelper(t, store)
-	original := h.createFullIssue("bd-1", 120)
+	original := h.createFullIssue("test-1", 120)
 
 	// Export to JSONL
 	buf := h.encodeJSONL([]*types.Issue{original})

@@ -21,20 +21,15 @@ func TestImportReturnsCorrectCounts(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, ".beads", "issues.db")
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		t.Fatalf("Failed to create .beads dir: %v", err)
-	}
-
 	// Initialize database
 	store := newTestStore(t, dbPath)
-	defer store.Close()
 
 	ctx := context.Background()
 
 	// Create test issues to import
 	issues := make([]*types.Issue, 0, 5)
 	for i := 1; i <= 5; i++ {
-		id := fmt.Sprintf("bd-%d", i)
+		id := fmt.Sprintf("test-%d", i)
 		issues = append(issues, &types.Issue{
 			ID:          id,
 			Title:       fmt.Sprintf("Test Issue %d", i),
