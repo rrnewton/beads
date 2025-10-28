@@ -21,6 +21,6 @@ func ExtractIssueNumber(issueID string) int {
 		return 0
 	}
 	var num int
-	fmt.Sscanf(parts[1], "%d", &num)
+	_, _ = fmt.Sscanf(parts[1], "%d", &num) // Error ignored - num will be 0 if parse fails
 	return num
 }

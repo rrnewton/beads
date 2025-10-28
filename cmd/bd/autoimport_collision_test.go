@@ -25,7 +25,7 @@ func createTestDBWithIssues(t *testing.T, issues []*types.Issue) (string, *sqlit
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
@@ -655,7 +655,7 @@ func TestAutoImportJSONLNotFound(t *testing.T) {
 	dbPath = filepath.Join(tmpDir, "test.db")
 	// Don't create JSONL file
 
-	testStore, err := sqlite.New(dbPath)
+	testStore := newTestStore(t, dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
