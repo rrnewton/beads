@@ -131,7 +131,7 @@ func TestCompactTier1_DryRun(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	issue := createClosedIssue(t, store, "test-1")
+	issue := createClosedIssue(t, store, "bd-test-1")
 
 	config := &Config{DryRun: true}
 	c, err := New(store, "", config)
@@ -164,7 +164,7 @@ func TestCompactTier1_IneligibleIssue(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	issue := &types.Issue{
-		ID:          "test-open",
+		ID:          "bd-test-open",
 		Title:       "Open Issue",
 		Description: "Should not be compacted",
 		Status:      types.StatusOpen,
@@ -187,7 +187,7 @@ func TestCompactTier1_IneligibleIssue(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for ineligible issue, got nil")
 	}
-	if err.Error() != "issue test-open is not eligible for Tier 1 compaction: issue is not closed" {
+	if err.Error() != "issue bd-test-open is not eligible for Tier 1 compaction: issue is not closed" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -200,7 +200,7 @@ func TestCompactTier1_WithAPI(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	issue := createClosedIssue(t, store, "test-api")
+	issue := createClosedIssue(t, store, "bd-test-api")
 
 	c, err := New(store, "", &Config{Concurrency: 1})
 	if err != nil {
@@ -235,8 +235,8 @@ func TestCompactTier1Batch_DryRun(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	issue1 := createClosedIssue(t, store, "test-batch-1")
-	issue2 := createClosedIssue(t, store, "test-batch-2")
+	issue1 := createClosedIssue(t, store, "bd-test-batch-1")
+	issue2 := createClosedIssue(t, store, "bd-test-batch-2")
 
 	config := &Config{DryRun: true, Concurrency: 2}
 	c, err := New(store, "", config)
@@ -268,12 +268,12 @@ func TestCompactTier1Batch_WithIneligible(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	closedIssue := createClosedIssue(t, store, "test-closed")
+	closedIssue := createClosedIssue(t, store, "bd-test-closed")
 
 	ctx := context.Background()
 	now := time.Now()
 	openIssue := &types.Issue{
-		ID:          "test-open",
+		ID:          "bd-test-open2",
 		Title:       "Open Issue",
 		Description: "Should not be compacted",
 		Status:      types.StatusOpen,
@@ -323,9 +323,9 @@ func TestCompactTier1Batch_WithAPI(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	issue1 := createClosedIssue(t, store, "test-api-batch-1")
-	issue2 := createClosedIssue(t, store, "test-api-batch-2")
-	issue3 := createClosedIssue(t, store, "test-api-batch-3")
+	issue1 := createClosedIssue(t, store, "bd-test-api-batch-1")
+	issue2 := createClosedIssue(t, store, "bd-test-api-batch-2")
+	issue3 := createClosedIssue(t, store, "bd-test-api-batch-3")
 
 	c, err := New(store, "", &Config{Concurrency: 2})
 	if err != nil {
@@ -369,7 +369,7 @@ func TestMockAPI_CompactTier1(t *testing.T) {
 	store := setupTestStorage(t)
 	defer store.Close()
 
-	issue := createClosedIssue(t, store, "test-mock")
+	issue := createClosedIssue(t, store, "bd-test-mock")
 
 	c, err := New(store, "", &Config{DryRun: true, Concurrency: 1})
 	if err != nil {
@@ -388,9 +388,9 @@ func TestBatchOperations_ErrorHandling(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	closedIssue := createClosedIssue(t, store, "test-closed")
+	closedIssue := createClosedIssue(t, store, "bd-test-closed2")
 	openIssue := &types.Issue{
-		ID:          "test-open",
+		ID:          "bd-test-open3",
 		Title:       "Open",
 		Description: "Open issue",
 		Status:      types.StatusOpen,
