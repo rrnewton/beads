@@ -49,7 +49,7 @@ func TestGitPullSyncIntegration(t *testing.T) {
 	defer clone1Store.Close()
 	
 	ctx := context.Background()
-	if err := clone1Store.SetMetadata(ctx, "issue_prefix", "test"); err != nil {
+	if err := clone1Store.SetMetadata(ctx, "issue-prefix", "test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 	
@@ -94,7 +94,7 @@ func TestGitPullSyncIntegration(t *testing.T) {
 	clone2Store := newTestStore(t, clone2DBPath)
 	defer clone2Store.Close()
 	
-	if err := clone2Store.SetMetadata(ctx, "issue_prefix", "test"); err != nil {
+	if err := clone2Store.SetMetadata(ctx, "issue-prefix", "test"); err != nil {
 		t.Fatalf("Failed to set prefix: %v", err)
 	}
 	

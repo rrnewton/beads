@@ -20,9 +20,9 @@ func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 	}
 
 	ctx := context.Background()
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
+		t.Fatalf("failed to set issue-prefix: %v", err)
 	}
 	if err := store.SetConfig(ctx, "compact_tier1_days", "0"); err != nil {
 		t.Fatalf("failed to set config: %v", err)
