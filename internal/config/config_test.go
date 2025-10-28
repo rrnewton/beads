@@ -1,8 +1,11 @@
 package config
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -242,5 +245,70 @@ func TestAllSettings(t *testing.T) {
 	// Check that our custom key is in the settings
 	if val, ok := settings["custom-key"]; !ok || val != "custom-value" {
 		t.Errorf("AllSettings() missing or incorrect custom-key: got %v", val)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	// Create a temporary directory for config file
+	tmpDir := t.TempDir()
+
+	// Create a config file with both supported and unsupported keys
+	configContent := `
+json: true
+actor: testuser
+unsupported-key: somevalue
+another-bad-key: anothervalue
+`
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0750); err != nil {
+		t.Fatalf("failed to create .beads directory: %v", err)
+	}
+
+	configPath := filepath.Join(beadsDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	// Change to tmp directory
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer os.Chdir(origDir)
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	// Capture log output
+	var logBuf bytes.Buffer
+	oldLogger := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(oldLogger)
+
+	// Initialize viper (this should trigger validation warnings)
+	err = Initialize()
+	if err != nil {
+		t.Fatalf("Initialize() returned error: %v", err)
+	}
+
+	// Check that warnings were logged for unsupported keys
+	logOutput := logBuf.String()
+
+	if !strings.Contains(logOutput, "unsupported-key") {
+		t.Errorf("Expected warning about 'unsupported-key', got: %s", logOutput)
+	}
+
+	if !strings.Contains(logOutput, "another-bad-key") {
+		t.Errorf("Expected warning about 'another-bad-key', got: %s", logOutput)
+	}
+
+	// Verify supported keys did not generate warnings
+	if strings.Contains(logOutput, "'json'") {
+		t.Errorf("Should not warn about supported key 'json', got: %s", logOutput)
+	}
+
+	if strings.Contains(logOutput, "'actor'") {
+		t.Errorf("Should not warn about supported key 'actor', got: %s", logOutput)
 	}
 }
