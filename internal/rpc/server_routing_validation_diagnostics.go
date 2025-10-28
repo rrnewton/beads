@@ -80,20 +80,8 @@ func (s *Server) validateDatabaseBinding(req *Request) error {
 
 	// For multi-database daemons: If a cwd is provided, verify the client expects
 	// the database that would be selected for that cwd
-	var daemonDB string
-	if req.Cwd != "" {
-		// Use the database discovery logic to find which DB would be used
-		dbPath := s.findDatabaseForCwd(req.Cwd)
-		if dbPath != "" {
-			daemonDB = dbPath
-		} else {
-			// No database found for cwd, will fall back to default storage
-			daemonDB = s.storage.Path()
-		}
-	} else {
-		// No cwd provided, use default storage
-		daemonDB = s.storage.Path()
-	}
+	// Note: Multi-database support removed, always use default storage
+	daemonDB := s.storage.Path()
 
 	// Normalize both paths for comparison (resolve symlinks, clean paths)
 	expectedPath, err := filepath.EvalSymlinks(req.ExpectedDB)
@@ -312,9 +300,8 @@ func (s *Server) handleHealth(req *Request) Response {
 		status = "degraded"
 	}
 
-	s.cacheMu.RLock()
-	cacheSize := len(s.storageCache)
-	s.cacheMu.RUnlock()
+	// Cache removed - set to 0 for backward compatibility
+	cacheSize := 0
 
 	// Check version compatibility
 	compatible := true
@@ -331,8 +318,8 @@ func (s *Server) handleHealth(req *Request) Response {
 		Compatible:     compatible,
 		Uptime:         time.Since(s.startTime).Seconds(),
 		CacheSize:      cacheSize,
-		CacheHits:      atomic.LoadInt64(&s.cacheHits),
-		CacheMisses:    atomic.LoadInt64(&s.cacheMisses),
+		CacheHits:      0, // Cache removed
+		CacheMisses:    0, // Cache removed
 		DBResponseTime: dbResponseMs,
 		ActiveConns:    atomic.LoadInt32(&s.activeConns),
 		MaxConns:       s.maxConns,
@@ -352,13 +339,12 @@ func (s *Server) handleHealth(req *Request) Response {
 }
 
 func (s *Server) handleMetrics(_ *Request) Response {
-	s.cacheMu.RLock()
-	cacheSize := len(s.storageCache)
-	s.cacheMu.RUnlock()
+	// Cache removed - set to 0 for backward compatibility
+	cacheSize := 0
 
 	snapshot := s.metrics.Snapshot(
-		atomic.LoadInt64(&s.cacheHits),
-		atomic.LoadInt64(&s.cacheMisses),
+		0, // cacheHits - cache removed
+		0, // cacheMisses - cache removed
 		cacheSize,
 		int(atomic.LoadInt32(&s.activeConns)),
 	)

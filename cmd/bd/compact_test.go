@@ -30,7 +30,7 @@ func TestCompactDryRun(t *testing.T) {
 	
 	// Create a closed issue
 	issue := &types.Issue{
-		ID:          "bd-1",
+		ID:          "test-1",
 		Title:       "Test Issue",
 		Description: "This is a long description that should be compacted. " + string(make([]byte, 500)),
 		Status:      types.StatusClosed,
@@ -47,7 +47,7 @@ func TestCompactDryRun(t *testing.T) {
 	// Test dry run - should not error even without API key
 	compactDryRun = true
 	compactTier = 1
-	compactID = "bd-1"
+	compactID = "test-1"
 	compactForce = false
 	jsonOutput = false
 	
@@ -55,7 +55,7 @@ func TestCompactDryRun(t *testing.T) {
 	daemonClient = nil
 
 	// Should check eligibility without error
-	eligible, reason, err := sqliteStore.CheckEligibility(ctx, "bd-1", 1)
+	eligible, reason, err := sqliteStore.CheckEligibility(ctx, "test-1", 1)
 	if err != nil {
 		t.Fatalf("CheckEligibility failed: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCompactValidation(t *testing.T) {
 	}{
 		{
 			name:      "both id and all",
-			compactID: "bd-1",
+			compactID: "test-1",
 			compactAll: true,
 			wantError: true,
 		},
@@ -99,7 +99,7 @@ func TestCompactValidation(t *testing.T) {
 		},
 		{
 			name:       "id only",
-			compactID:  "bd-1",
+			compactID:  "test-1",
 			wantError:  false,
 		},
 		{
@@ -156,7 +156,7 @@ func TestCompactStats(t *testing.T) {
 	// Create mix of issues - some eligible, some not
 	issues := []*types.Issue{
 		{
-			ID:        "bd-1",
+			ID:        "test-1",
 			Title:     "Old closed",
 			Status:    types.StatusClosed,
 			Priority:  2,
@@ -165,7 +165,7 @@ func TestCompactStats(t *testing.T) {
 			ClosedAt:  ptrTime(time.Now().Add(-35 * 24 * time.Hour)),
 		},
 		{
-			ID:        "bd-2",
+			ID:        "test-2",
 			Title:     "Recent closed",
 			Status:    types.StatusClosed,
 			Priority:  2,
@@ -174,7 +174,7 @@ func TestCompactStats(t *testing.T) {
 			ClosedAt:  ptrTime(time.Now().Add(-5 * 24 * time.Hour)),
 		},
 		{
-			ID:        "bd-3",
+			ID:        "test-3",
 			Title:     "Still open",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -200,7 +200,7 @@ func TestCompactStats(t *testing.T) {
 	}
 
 	// Test eligibility check for old closed issue
-	eligible, _, err := sqliteStore.CheckEligibility(ctx, "bd-1", 1)
+	eligible, _, err := sqliteStore.CheckEligibility(ctx, "test-1", 1)
 	if err != nil {
 		t.Fatalf("CheckEligibility failed: %v", err)
 	}

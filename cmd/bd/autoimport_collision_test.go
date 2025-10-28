@@ -107,7 +107,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-mc-1",
+			ID:        "test-mc-1",
 			Title:     "Local version 1",
 			Status:    types.StatusClosed,
 			Priority:  1,
@@ -117,7 +117,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			ClosedAt:  &closedTime,
 		},
 		{
-			ID:        "bd-mc-2",
+			ID:        "test-mc-2",
 			Title:     "Local version 2",
 			Status:    types.StatusInProgress,
 			Priority:  2,
@@ -126,7 +126,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-3",
+			ID:        "test-mc-3",
 			Title:     "Local version 3",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -135,7 +135,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-4",
+			ID:        "test-mc-4",
 			Title:     "Exact match",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -144,7 +144,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-5",
+			ID:        "test-mc-5",
 			Title:     "Another exact match",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -160,7 +160,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 	// Create JSONL with 3 colliding issues, 2 exact matches, and 1 new issue
 	jsonlIssues := []*types.Issue{
 		{
-			ID:        "bd-mc-1",
+			ID:        "test-mc-1",
 			Title:     "Remote version 1 (conflict)",
 			Status:    types.StatusOpen,
 			Priority:  3,
@@ -169,7 +169,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-2",
+			ID:        "test-mc-2",
 			Title:     "Remote version 2 (conflict)",
 			Status:    types.StatusClosed,
 			Priority:  1,
@@ -179,7 +179,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			ClosedAt:  &closedTime,
 		},
 		{
-			ID:        "bd-mc-3",
+			ID:        "test-mc-3",
 			Title:     "Remote version 3 (conflict)",
 			Status:    types.StatusBlocked,
 			Priority:  3,
@@ -188,7 +188,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-4",
+			ID:        "test-mc-4",
 			Title:     "Exact match",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -197,7 +197,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-5",
+			ID:        "test-mc-5",
 			Title:     "Another exact match",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -206,7 +206,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-mc-6",
+			ID:        "test-mc-6",
 			Title:     "Brand new issue",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -224,23 +224,23 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify local versions are preserved (original IDs still have local content)
-	local1, _ := testStore.GetIssue(ctx, "bd-mc-1")
+	local1, _ := testStore.GetIssue(ctx, "test-mc-1")
 	if local1.Title != "Local version 1" {
 		t.Errorf("Expected local version preserved for test-mc-1, got: %s", local1.Title)
 	}
 
-	local2, _ := testStore.GetIssue(ctx, "bd-mc-2")
+	local2, _ := testStore.GetIssue(ctx, "test-mc-2")
 	if local2.Title != "Local version 2" {
 		t.Errorf("Expected local version preserved for test-mc-2, got: %s", local2.Title)
 	}
 
-	local3, _ := testStore.GetIssue(ctx, "bd-mc-3")
+	local3, _ := testStore.GetIssue(ctx, "test-mc-3")
 	if local3.Title != "Local version 3" {
 		t.Errorf("Expected local version preserved for test-mc-3, got: %s", local3.Title)
 	}
 
 	// Verify new issue was imported
-	newIssue, _ := testStore.GetIssue(ctx, "bd-mc-6")
+	newIssue, _ := testStore.GetIssue(ctx, "test-mc-6")
 	if newIssue == nil {
 		t.Fatal("Expected new issue test-mc-6 to be imported")
 	}
@@ -252,7 +252,7 @@ func TestAutoImportMultipleCollisionsRemapped(t *testing.T) {
 	if !strings.Contains(stderrOutput, "remapped") {
 		t.Errorf("Expected remapping message in stderr, got: %s", stderrOutput)
 	}
-	if !strings.Contains(stderrOutput, "bd-mc-1") {
+	if !strings.Contains(stderrOutput, "test-mc-1") {
 		t.Errorf("Expected test-mc-1 in remapping message, got: %s", stderrOutput)
 	}
 
@@ -276,7 +276,7 @@ func TestAutoImportAllCollisionsRemapped(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-ac-1",
+			ID:        "test-ac-1",
 			Title:     "Local 1",
 			Status:    types.StatusClosed,
 			Priority:  1,
@@ -286,7 +286,7 @@ func TestAutoImportAllCollisionsRemapped(t *testing.T) {
 			ClosedAt:  &closedTime,
 		},
 		{
-			ID:        "bd-ac-2",
+			ID:        "test-ac-2",
 			Title:     "Local 2",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -302,7 +302,7 @@ func TestAutoImportAllCollisionsRemapped(t *testing.T) {
 	// JSONL with all conflicts (different content for same IDs)
 	jsonlIssues := []*types.Issue{
 		{
-			ID:        "bd-ac-1",
+			ID:        "test-ac-1",
 			Title:     "Remote 1 (conflict)",
 			Status:    types.StatusOpen,
 			Priority:  3,
@@ -311,7 +311,7 @@ func TestAutoImportAllCollisionsRemapped(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-ac-2",
+			ID:        "test-ac-2",
 			Title:     "Remote 2 (conflict)",
 			Status:    types.StatusClosed,
 			Priority:  1,
@@ -330,12 +330,12 @@ func TestAutoImportAllCollisionsRemapped(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify all local versions preserved
-	local1, _ := testStore.GetIssue(ctx, "bd-ac-1")
+	local1, _ := testStore.GetIssue(ctx, "test-ac-1")
 	if local1.Title != "Local 1" {
 		t.Errorf("Expected local version preserved, got: %s", local1.Title)
 	}
 
-	local2, _ := testStore.GetIssue(ctx, "bd-ac-2")
+	local2, _ := testStore.GetIssue(ctx, "test-ac-2")
 	if local2.Title != "Local 2" {
 		t.Errorf("Expected local version preserved, got: %s", local2.Title)
 	}
@@ -352,7 +352,7 @@ func TestAutoImportExactMatchesOnly(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-em-1",
+			ID:        "test-em-1",
 			Title:     "Exact match issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -368,7 +368,7 @@ func TestAutoImportExactMatchesOnly(t *testing.T) {
 	// JSONL with exact match + new issue
 	jsonlIssues := []*types.Issue{
 		{
-			ID:        "bd-em-1",
+			ID:        "test-em-1",
 			Title:     "Exact match issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -377,7 +377,7 @@ func TestAutoImportExactMatchesOnly(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-em-2",
+			ID:        "test-em-2",
 			Title:     "New issue",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -395,7 +395,7 @@ func TestAutoImportExactMatchesOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify new issue imported
-	newIssue, _ := testStore.GetIssue(ctx, "bd-em-2")
+	newIssue, _ := testStore.GetIssue(ctx, "test-em-2")
 	if newIssue == nil {
 		t.Fatal("Expected new issue to be imported")
 	}
@@ -415,7 +415,7 @@ func TestAutoImportHashUnchanged(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-hu-1",
+			ID:        "test-hu-1",
 			Title:     "Test issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -456,7 +456,7 @@ func TestAutoImportParseError(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-pe-1",
+			ID:        "test-pe-1",
 			Title:     "Test issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -471,7 +471,7 @@ func TestAutoImportParseError(t *testing.T) {
 
 	// Create malformed JSONL
 	jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
-	os.WriteFile(jsonlPath, []byte(`{"id":"bd-pe-1","title":"Good issue","status":"open","priority":1,"issue_type":"task","created_at":"2025-10-16T00:00:00Z","updated_at":"2025-10-16T00:00:00Z"}
+	os.WriteFile(jsonlPath, []byte(`{"id":"test-pe-1","title":"Good issue","status":"open","priority":1,"issue_type":"task","created_at":"2025-10-16T00:00:00Z","updated_at":"2025-10-16T00:00:00Z"}
 {invalid json here}
 `), 0644)
 
@@ -490,7 +490,7 @@ func TestAutoImportEmptyJSONL(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-ej-1",
+			ID:        "test-ej-1",
 			Title:     "Existing issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -513,7 +513,7 @@ func TestAutoImportEmptyJSONL(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify existing issue still exists (not deleted)
-	existing, _ := testStore.GetIssue(ctx, "bd-ej-1")
+	existing, _ := testStore.GetIssue(ctx, "test-ej-1")
 	if existing == nil {
 		t.Fatal("Expected existing issue to remain after empty JSONL import")
 	}
@@ -525,7 +525,7 @@ func TestAutoImportNewIssuesOnly(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-ni-1",
+			ID:        "test-ni-1",
 			Title:     "Existing issue",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -541,7 +541,7 @@ func TestAutoImportNewIssuesOnly(t *testing.T) {
 	// JSONL with only new issues (no collisions, no exact matches)
 	jsonlIssues := []*types.Issue{
 		{
-			ID:        "bd-ni-2",
+			ID:        "test-ni-2",
 			Title:     "New issue 1",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -550,7 +550,7 @@ func TestAutoImportNewIssuesOnly(t *testing.T) {
 			UpdatedAt: now,
 		},
 		{
-			ID:        "bd-ni-3",
+			ID:        "test-ni-3",
 			Title:     "New issue 2",
 			Status:    types.StatusOpen,
 			Priority:  2,
@@ -568,12 +568,12 @@ func TestAutoImportNewIssuesOnly(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify new issues imported
-	issue2, _ := testStore.GetIssue(ctx, "bd-ni-2")
+	issue2, _ := testStore.GetIssue(ctx, "test-ni-2")
 	if issue2 == nil || issue2.Title != "New issue 1" {
 		t.Error("Expected new issue 1 to be imported")
 	}
 
-	issue3, _ := testStore.GetIssue(ctx, "bd-ni-3")
+	issue3, _ := testStore.GetIssue(ctx, "test-ni-3")
 	if issue3 == nil || issue3.Title != "New issue 2" {
 		t.Error("Expected new issue 2 to be imported")
 	}
@@ -591,7 +591,7 @@ func TestAutoImportUpdatesExactMatches(t *testing.T) {
 
 	dbIssues := []*types.Issue{
 		{
-			ID:        "bd-um-1",
+			ID:        "test-um-1",
 			Title:     "Exact match",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -607,7 +607,7 @@ func TestAutoImportUpdatesExactMatches(t *testing.T) {
 	// JSONL with exact match (same content, newer timestamp)
 	jsonlIssues := []*types.Issue{
 		{
-			ID:        "bd-um-1",
+			ID:        "test-um-1",
 			Title:     "Exact match",
 			Status:    types.StatusOpen,
 			Priority:  1,
@@ -625,7 +625,7 @@ func TestAutoImportUpdatesExactMatches(t *testing.T) {
 	ctx := context.Background()
 
 	// Verify issue was updated (UpdatedAt should be newer)
-	updated, _ := testStore.GetIssue(ctx, "bd-um-1")
+	updated, _ := testStore.GetIssue(ctx, "test-um-1")
 	if updated.UpdatedAt.Before(now.Add(-1 * time.Second)) {
 		t.Errorf("Expected UpdatedAt to be updated to %v, got %v", now, updated.UpdatedAt)
 	}
@@ -678,7 +678,7 @@ func TestAutoImportCollisionRemapMultipleFields(t *testing.T) {
 	// Create issue with many fields set
 	dbIssues := []*types.Issue{
 		{
-			ID:                 "bd-fields-1",
+			ID:                 "test-fields-1",
 			Title:              "Local title",
 			Description:        "Local description",
 			Status:             types.StatusOpen,
@@ -700,7 +700,7 @@ func TestAutoImportCollisionRemapMultipleFields(t *testing.T) {
 	// JSONL with conflicts in multiple fields
 	jsonlIssues := []*types.Issue{
 		{
-			ID:                 "bd-fields-1",
+			ID:                 "test-fields-1",
 			Title:              "Remote title (conflict)",
 			Description:        "Remote description (conflict)",
 			Status:             types.StatusClosed,
@@ -721,12 +721,12 @@ func TestAutoImportCollisionRemapMultipleFields(t *testing.T) {
 	stderrOutput := captureStderr(t, autoImportIfNewer)
 
 	// Verify remapping occurred
-	if !strings.Contains(stderrOutput, "bd-fields-1") {
+	if !strings.Contains(stderrOutput, "test-fields-1") {
 		t.Logf("Expected remapping message for test-fields-1: %s", stderrOutput)
 	}
 
 	// Verify local version of issue is preserved with all fields
-	local, _ := testStore.GetIssue(ctx, "bd-fields-1")
+	local, _ := testStore.GetIssue(ctx, "test-fields-1")
 	if local.Title != "Local title" {
 		t.Errorf("Expected local title preserved, got: %s", local.Title)
 	}
