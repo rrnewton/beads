@@ -17,7 +17,7 @@ func TestCounterSyncAfterDelete(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create issues bd-1 through bd-5
@@ -99,7 +99,7 @@ func TestCounterSyncAfterBatchDelete(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create issues bd-1 through bd-10
@@ -180,7 +180,7 @@ func TestCounterSyncAfterDeleteAll(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create issues bd-1 through bd-5

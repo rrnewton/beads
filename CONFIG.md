@@ -165,7 +165,7 @@ Configuration keys use dot-notation namespaces to organize settings:
 ### Core Namespaces
 
 - `compact_*` - Compaction settings (see EXTENDING.md)
-- `issue_prefix` - Issue ID prefix (managed by `bd init`)
+- `issue-prefix` - Issue ID prefix (managed by `bd init`)
 
 ### Integration Namespaces
 
@@ -275,7 +275,7 @@ jira_project = get_config("jira.project")
 Some bd commands automatically use configuration:
 
 - `bd compact` uses `compact_tier1_days`, `compact_tier1_dep_levels`, etc.
-- `bd init` sets `issue_prefix`
+- `bd init` sets `issue-prefix`
 
 External integration scripts can read configuration to sync with Jira, Linear, GitHub, etc.
 

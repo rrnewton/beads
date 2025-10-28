@@ -167,10 +167,10 @@ func TestLibraryIntegration(t *testing.T) {
 	}
 	defer store.Close()
 
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
 	ctx := context.Background()
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	h := newIntegrationHelper(t, store)
@@ -332,9 +332,9 @@ func TestBatchCreateIssues(t *testing.T) {
 
 	ctx := context.Background()
 
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create multiple issues
@@ -410,10 +410,10 @@ func TestRoundTripIssue(t *testing.T) {
 	}
 	defer store.Close()
 
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
+	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
 	ctx := context.Background()
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	h := newIntegrationHelper(t, store)

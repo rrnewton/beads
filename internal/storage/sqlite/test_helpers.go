@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// newTestStore creates a SQLiteStorage with issue_prefix configured (bd-166)
+// newTestStore creates a SQLiteStorage with issue-prefix configured (bd-166)
 // This prevents "database not initialized" errors in tests
 func newTestStore(t *testing.T, dbPath string) *SQLiteStorage {
 	t.Helper()

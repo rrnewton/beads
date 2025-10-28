@@ -155,8 +155,8 @@ func TestInitCommand(t *testing.T) {
 		}
 		defer store.Close()
 
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
+			ctx := context.Background()
+			prefix, err := store.GetConfig(ctx, "issue_prefix")
 			if err != nil {
 				t.Fatalf("Failed to get issue prefix from database: %v", err)
 			}

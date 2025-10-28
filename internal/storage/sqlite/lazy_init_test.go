@@ -34,7 +34,7 @@ func TestLazyCounterInitialization(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create some issues with explicit IDs (simulating import)
@@ -191,7 +191,7 @@ func TestCounterInitializationFromExisting(t *testing.T) {
 
 	// Set the issue prefix to "bd" for this test
 	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	// Create issues with explicit IDs, out of order

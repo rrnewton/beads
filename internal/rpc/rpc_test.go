@@ -388,6 +388,9 @@ func TestConcurrentRequests(t *testing.T) {
 			}
 			defer client.Close()
 
+			// Set database path so client routes to the correct test database
+			client.dbPath = server.dbPath
+
 			args := &CreateArgs{
 				Title:     "Concurrent Issue",
 				IssueType: "task",

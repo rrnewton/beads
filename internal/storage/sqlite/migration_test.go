@@ -192,7 +192,7 @@ func TestMigrateIssueCountersTableEmptyDB(t *testing.T) {
 	// Set the issue prefix to "bd" for this test
 	err = store.SetConfig(ctx, "issue_prefix", "bd")
 	if err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 	
 	issue := &types.Issue{
@@ -236,7 +236,7 @@ func TestMigrateIssueCountersTableIdempotent(t *testing.T) {
 	// Set the issue prefix to "bd" for this test
 	err = store1.SetConfig(ctx, "issue_prefix", "bd")
 	if err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 	
 	issue := &types.Issue{
