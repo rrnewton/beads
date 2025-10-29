@@ -246,7 +246,7 @@ func backupPollutedIssues(polluted []pollutionResult, path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	
 	// Write each issue as JSONL
 	for _, p := range polluted {

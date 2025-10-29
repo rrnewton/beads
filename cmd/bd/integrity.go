@@ -85,7 +85,7 @@ func checkDuplicateIDs(ctx context.Context, store storage.Storage) error {
 	if err != nil {
 		return fmt.Errorf("failed to check for duplicate IDs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var duplicates []string
 	for rows.Next() {
@@ -141,7 +141,7 @@ func checkOrphanedDeps(ctx context.Context, store storage.Storage) ([]string, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to check for orphaned dependencies: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var orphaned []string
 	for rows.Next() {

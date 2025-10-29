@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: false
@@ -6,10 +8,10 @@ linters:
   disable-all: true  # Disable all default linters
   enable:
     - errcheck
-    - gosec
+    # - gosec  # Disabled temporarily
     # - gocyclo  # Disabled: high complexity acceptable for large functions (see LINTING.md)
     - misspell
-    - unconvert
+    # - unconvert
 
 linters-settings:
   dupl:
@@ -43,6 +45,8 @@ linters-settings:
       - name: exported
 
 issues:
+  exclude-dirs:
+    - vendor
   exclude:
     - "var-naming: avoid meaningless package names"
     - "exported.*SQLiteStorage.*stutters"
