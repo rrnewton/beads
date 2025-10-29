@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -24,6 +25,14 @@ func createTestDBWithIssues(t *testing.T, issues []*types.Issue) (string, *sqlit
 	}
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
+	// Initialize config and set issue prefix
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("test"); err != nil {
+		t.Fatalf("Failed to set issue_prefix: %v", err)
+	}
+
 	dbPath := filepath.Join(tmpDir, "test.db")
 	testStore, err := sqlite.New(dbPath)
 	if err != nil {
@@ -32,12 +41,7 @@ func createTestDBWithIssues(t *testing.T, issues []*types.Issue) (string, *sqlit
 	t.Cleanup(func() { testStore.Close() })
 
 	ctx := context.Background()
-	
-	// Set issue_prefix to prevent "database not initialized" errors
-	if err := testStore.SetConfig(ctx, "issue_prefix", "test"); err != nil {
-		t.Fatalf("Failed to set issue_prefix: %v", err)
-	}
-	
+
 	for _, issue := range issues {
 		if err := testStore.CreateIssue(ctx, issue, "test"); err != nil {
 			t.Fatalf("Failed to create issue %s: %v", issue.ID, err)
@@ -651,6 +655,14 @@ func TestAutoImportJSONLNotFound(t *testing.T) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
+
+	// Initialize config and set issue prefix
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("test"); err != nil {
+		t.Fatalf("Failed to set issue_prefix: %v", err)
+	}
 
 	dbPath = filepath.Join(tmpDir, "test.db")
 	// Don't create JSONL file

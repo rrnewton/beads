@@ -13,6 +13,7 @@ import (
 	"time"
 
 	// Import SQLite driver
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 	_ "modernc.org/sqlite"
 )
@@ -724,14 +725,11 @@ func (s *SQLiteStorage) CreateIssue(ctx context.Context, issue *types.Issue, act
 	}()
 
 	// Get prefix from config (needed for both ID generation and validation)
-	var prefix string
-	err = conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-	if err == sql.ErrNoRows || prefix == "" {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		// CRITICAL: Reject operation if issue_prefix config is missing (bd-166)
 		// This prevents duplicate issues with wrong prefix
 		return fmt.Errorf("database not initialized: issue_prefix config is missing (run 'bd init --prefix <prefix>' first)")
-	} else if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Generate ID if not set (inside transaction to prevent race conditions)
@@ -857,13 +855,10 @@ func validateBatchIssues(issues []*types.Issue) error {
 // generateBatchIDs generates IDs for all issues that need them atomically
 func generateBatchIDs(ctx context.Context, conn *sql.Conn, issues []*types.Issue, dbPath string) error {
 	// Get prefix from config (needed for both generation and validation)
-	var prefix string
-	err := conn.QueryRowContext(ctx, `SELECT value FROM config WHERE key = ?`, "issue_prefix").Scan(&prefix)
-	if err == sql.ErrNoRows || prefix == "" {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		// CRITICAL: Reject operation if issue_prefix config is missing (bd-166)
 		return fmt.Errorf("database not initialized: issue_prefix config is missing (run 'bd init --prefix <prefix>' first)")
-	} else if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
 	}
 
 	// Count how many issues need IDs and validate explicitly provided IDs
@@ -886,6 +881,7 @@ func generateBatchIDs(ctx context.Context, conn *sql.Conn, issues []*types.Issue
 
 	// Atomically reserve ID range
 	var nextID int
+	var err error
 	err = conn.QueryRowContext(ctx, `
 		INSERT INTO issue_counters (prefix, last_id)
 		SELECT ?, COALESCE(MAX(CAST(substr(id, LENGTH(?) + 2) AS INTEGER)), 0) + ?

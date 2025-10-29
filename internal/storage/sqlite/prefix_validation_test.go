@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -26,7 +27,7 @@ func TestPrefixValidation(t *testing.T) {
 	ctx := context.Background()
 
 	// Set prefix to "test"
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+	if err := config.SetIssuePrefix("test"); err != nil {
 		t.Fatalf("failed to set prefix: %v", err)
 	}
 
@@ -102,7 +103,7 @@ func TestPrefixValidationBatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Set prefix to "batch"
-	if err := store.SetConfig(ctx, "issue_prefix", "batch"); err != nil {
+	if err := config.SetIssuePrefix("batch"); err != nil {
 		t.Fatalf("failed to set prefix: %v", err)
 	}
 

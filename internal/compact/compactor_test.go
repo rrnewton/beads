@@ -6,12 +6,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
 func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 	t.Helper()
+
+	// Initialize config first
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		t.Fatalf("failed to set issue-prefix: %v", err)
+	}
 
 	tmpDB := t.TempDir() + "/test.db"
 	store, err := sqlite.New(tmpDB)
@@ -20,10 +29,7 @@ func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 	}
 
 	ctx := context.Background()
-	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue-prefix: %v", err)
-	}
+	// Set compact-specific config in database
 	if err := store.SetConfig(ctx, "compact_tier1_days", "0"); err != nil {
 		t.Fatalf("failed to set config: %v", err)
 	}
@@ -38,10 +44,10 @@ func createClosedIssue(t *testing.T, store *sqlite.SQLiteStorage, id string) *ty
 	t.Helper()
 
 	ctx := context.Background()
-	
+
 	// Get the configured prefix to determine actor
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		prefix = "bd" // fallback
 	}
 	
@@ -169,13 +175,13 @@ func TestCompactTier1_IneligibleIssue(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	
+
 	// Get the configured prefix to determine actor
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		prefix = "bd" // fallback
 	}
-	
+
 	now := time.Now()
 	issue := &types.Issue{
 		ID:          "bd-open",
@@ -285,13 +291,13 @@ func TestCompactTier1Batch_WithIneligible(t *testing.T) {
 	closedIssue := createClosedIssue(t, store, "bd-closed")
 
 	ctx := context.Background()
-	
+
 	// Get the configured prefix to determine actor
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		prefix = "bd" // fallback
 	}
-	
+
 	now := time.Now()
 	openIssue := &types.Issue{
 		ID:          "bd-open",
@@ -409,13 +415,13 @@ func TestBatchOperations_ErrorHandling(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
-	
+
 	// Get the configured prefix to determine actor
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
+	prefix := config.GetIssuePrefix()
+	if prefix == "" {
 		prefix = "bd" // fallback
 	}
-	
+
 	closedIssue := createClosedIssue(t, store, "bd-closed")
 	openIssue := &types.Issue{
 		ID:          "bd-open",

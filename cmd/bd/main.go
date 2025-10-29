@@ -83,6 +83,14 @@ var rootCmd = &cobra.Command{
 	Short: "bd - Dependency-aware issue tracker",
 	Long:  `Issues chained together like beads. A lightweight issue tracker with first-class dependency support.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Initialize config package (loads config.yaml and env vars)
+		if err := config.Initialize(); err != nil {
+			// Config initialization failure is not fatal - just log it
+			if os.Getenv("BD_DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "Debug: config.Initialize() failed: %v\n", err)
+			}
+		}
+
 		// Apply viper configuration if flags weren't explicitly set
 		// Priority: flags > viper (config file + env vars) > defaults
 		// Do this BEFORE early-return so init/version/help respect config

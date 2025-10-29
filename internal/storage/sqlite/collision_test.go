@@ -21,18 +21,9 @@ func TestDetectCollisions(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store := newTestStore(t, dbPath)
 
 	ctx := context.Background()
-
-	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Setup: Create some existing issues in the database
 	existingIssue1 := &types.Issue{
@@ -444,18 +435,9 @@ func TestScoreCollisions(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store := newTestStore(t, dbPath)
 
 	ctx := context.Background()
-
-	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Setup: Create issues with various reference patterns
 	issue1 := &types.Issue{
@@ -638,18 +620,9 @@ func TestRemapCollisions(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store := newTestStore(t, dbPath)
 
 	ctx := context.Background()
-
-	// Set issue prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Setup: Create an existing issue in the database with a high ID number
 	// This ensures that when we remap bd-2 and bd-3, they get new IDs that don't conflict
@@ -857,17 +830,9 @@ func TestDetectCollisionsReadOnly(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store := newTestStore(t, dbPath)
 
 	ctx := context.Background()
-
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Create an issue in the database
 	dbIssue := &types.Issue{
@@ -931,17 +896,9 @@ func TestApplyCollisionResolution(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("failed to create storage: %v", err)
-	}
-	defer store.Close()
+	store := newTestStore(t, dbPath)
 
 	ctx := context.Background()
-
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Create an issue to be renamed
 	oldIssue := &types.Issue{

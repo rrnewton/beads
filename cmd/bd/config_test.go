@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 )
 
@@ -156,18 +157,21 @@ func setupTestDB(t *testing.T) (*sqlite.SQLiteStorage, func()) {
 	}
 
 	testDB := filepath.Join(tmpDir, "test.db")
+
+	// CRITICAL (bd-166): Initialize config and set issue-prefix before creating storage
+	if err := config.Initialize(); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("Failed to set issue-prefix: %v", err)
+	}
+
 	store, err := sqlite.New(testDB)
 	if err != nil {
 		os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create test database: %v", err)
-	}
-
-	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		store.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
 	cleanup := func() {

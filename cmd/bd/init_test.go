@@ -156,9 +156,9 @@ func TestInitCommand(t *testing.T) {
 		defer store.Close()
 
 			ctx := context.Background()
-			prefix, err := store.GetConfig(ctx, "issue_prefix")
+		prefix, err := readIssuePrefixFromConfig(t, dbPath)
 			if err != nil {
-				t.Fatalf("Failed to get issue prefix from database: %v", err)
+			t.Fatalf("Failed to get issue prefix from config: %v", err)
 			}
 
 			expectedPrefix := tt.prefix
@@ -218,18 +218,11 @@ func TestInitAlreadyInitialized(t *testing.T) {
 		t.Fatalf("Second init failed: %v", err)
 	}
 
-	// Verify database still works (always beads.db now)
+	// Verify config.yaml has correct prefix (always beads.db now)
 	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
-	store, err := openExistingTestDB(t, dbPath)
+	prefix, err := readIssuePrefixFromConfig(t, dbPath)
 	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer store.Close()
-
-	ctx := context.Background()
-	prefix, err := store.GetConfig(ctx, "issue_prefix")
-	if err != nil {
-		t.Fatalf("Failed to get prefix after re-init: %v", err)
+		t.Fatalf("Failed to get prefix from config: %v", err)
 	}
 
 	if prefix != "test" {
@@ -280,15 +273,8 @@ func TestInitWithCustomDBPath(t *testing.T) {
 			t.Errorf("Database was not created at custom path %s", customDBPath)
 		}
 
-		// Verify database works
-		store, err := openExistingTestDB(t, customDBPath)
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-		defer store.Close()
-
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
+		// Verify config.yaml has correct prefix
+		prefix, err := readIssuePrefixFromConfig(t, customDBPath)
 		if err != nil {
 			t.Fatalf("Failed to get prefix: %v", err)
 		}
@@ -321,15 +307,8 @@ func TestInitWithCustomDBPath(t *testing.T) {
 			t.Errorf("Database was not created at BEADS_DB path %s", envDBPath)
 		}
 
-		// Verify database works
-		store, err := openExistingTestDB(t, envDBPath)
-		if err != nil {
-			t.Fatalf("Failed to open database: %v", err)
-		}
-		defer store.Close()
-
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
+		// Verify config.yaml has correct prefix
+		prefix, err := readIssuePrefixFromConfig(t, envDBPath)
 		if err != nil {
 			t.Fatalf("Failed to get prefix: %v", err)
 		}

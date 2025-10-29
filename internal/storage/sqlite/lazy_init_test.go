@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -33,7 +34,7 @@ func TestLazyCounterInitialization(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -120,15 +121,15 @@ func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
 	ctx := context.Background()
 
 	// Set a custom prefix
-	err := store.SetConfig(ctx, "issue_prefix", "custom")
+	err := config.SetIssuePrefix("custom")
 	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
+		t.Fatalf("SetIssuePrefix failed: %v", err)
 	}
 
 	// Create issue with default prefix first
-	err = store.SetConfig(ctx, "issue_prefix", "bd")
+	err = config.SetIssuePrefix("bd")
 	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
+		t.Fatalf("SetIssuePrefix failed: %v", err)
 	}
 
 	bdIssue := &types.Issue{
@@ -148,9 +149,9 @@ func TestLazyCounterInitializationMultiplePrefix(t *testing.T) {
 	}
 
 	// Now switch to custom prefix
-	err = store.SetConfig(ctx, "issue_prefix", "custom")
+	err = config.SetIssuePrefix("custom")
 	if err != nil {
-		t.Fatalf("SetConfig failed: %v", err)
+		t.Fatalf("SetIssuePrefix failed: %v", err)
 	}
 
 	customIssue := &types.Issue{
@@ -190,7 +191,7 @@ func TestCounterInitializationFromExisting(t *testing.T) {
 	ctx := context.Background()
 
 	// Set the issue prefix to "bd" for this test
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 

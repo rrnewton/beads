@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/beads"
+	"github.com/steveyegge/beads/internal/config"
 )
 
 // integrationTestHelper provides common test setup and assertion methods
@@ -168,8 +169,10 @@ func TestLibraryIntegration(t *testing.T) {
 	defer store.Close()
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 
@@ -330,12 +333,15 @@ func TestBatchCreateIssues(t *testing.T) {
 	}
 	defer store.Close()
 
-	ctx := context.Background()
-
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
+
+	ctx := context.Background()
 
 	// Create multiple issues
 	issues := make([]*beads.Issue, 5)
@@ -411,8 +417,10 @@ func TestRoundTripIssue(t *testing.T) {
 	defer store.Close()
 
 	// CRITICAL (bd-166): Set issue-prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
 		t.Fatalf("Failed to set issue-prefix: %v", err)
 	}
 

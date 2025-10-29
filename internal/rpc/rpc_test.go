@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	sqlitestorage "github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -32,18 +33,20 @@ func setupTestServer(t *testing.T) (*Server, *Client, func()) {
 	// Ensure socket doesn't exist from previous failed test
 	os.Remove(socketPath)
 
+	// Initialize config and set issue prefix (bd-166)
+	if err := config.Initialize(); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		os.RemoveAll(tmpDir)
+		t.Fatalf("Failed to set issue_prefix: %v", err)
+	}
+
 	store, err := sqlitestorage.New(dbPath)
 	if err != nil {
 		os.RemoveAll(tmpDir)
 		t.Fatalf("Failed to create store: %v", err)
-	}
-
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		store.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("Failed to set issue_prefix: %v", err)
 	}
 
 	server := NewServer(socketPath, store, tmpDir, dbPath)

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
@@ -43,6 +44,14 @@ func profileImportOperation(t *testing.T, numIssues int) {
 
 	dbPath := filepath.Join(tmpDir, "test.db")
 
+	// Initialize config
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("test"); err != nil {
+		t.Fatalf("Failed to set issue_prefix: %v", err)
+	}
+
 	// Initialize storage
 	ctx := context.Background()
 	var store storage.Storage
@@ -51,11 +60,6 @@ func profileImportOperation(t *testing.T, numIssues int) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 	defer store.Close()
-
-	// Set test config
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
-		t.Fatalf("Failed to set config: %v", err)
-	}
 
 	// Generate test issues
 	t.Logf("Generating %d test issues...", numIssues)
@@ -274,6 +278,15 @@ func TestImportWithExistingData(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Initialize config
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+	if err := config.SetIssuePrefix("test"); err != nil {
+		t.Fatalf("Failed to set issue_prefix: %v", err)
+	}
+
 	ctx := context.Background()
 	var store storage.Storage
 	store, err = sqlite.New(dbPath)
@@ -281,10 +294,6 @@ func TestImportWithExistingData(t *testing.T) {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
 	defer store.Close()
-
-	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
-		t.Fatalf("Failed to set config: %v", err)
-	}
 
 	// Generate and create initial issues
 	t.Logf("Creating %d initial issues...", numIssues)

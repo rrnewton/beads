@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/steveyegge/beads/internal/storage/sqlite"
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -42,11 +41,7 @@ func TestRenamePrefixCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	testStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-	defer testStore.Close()
+	testStore := newTestStoreWithPrefix(t, dbPath, "old")
 
 	ctx := context.Background()
 
@@ -111,10 +106,11 @@ func TestRenamePrefixCommand(t *testing.T) {
 		t.Fatalf("renamePrefixInDB failed: %v", err)
 	}
 
-	newPrefix, err := testStore.GetConfig(ctx, "issue_prefix")
-	if err != nil {
-		t.Fatalf("Failed to get new prefix: %v", err)
+	// Reload config to get the updated prefix
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("Failed to reinitialize config: %v", err)
 	}
+	newPrefix := config.GetIssuePrefix()
 	if newPrefix != "new" {
 		t.Errorf("Expected prefix 'new', got %q", newPrefix)
 	}
@@ -170,22 +166,11 @@ func TestRenamePrefixInDB(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 
-	testStore, err := sqlite.New(dbPath)
-	if err != nil {
-		t.Fatalf("Failed to create test database: %v", err)
-	}
-	t.Cleanup(func() {
-		testStore.Close()
-		os.Remove(dbPath)
-	})
+	testStore := newTestStoreWithPrefix(t, dbPath, "old")
 
 	ctx := context.Background()
 	store = testStore
 	actor = "test-actor"
-
-	if err := testStore.SetConfig(ctx, "issue_prefix", "old"); err != nil {
-		t.Fatalf("Failed to set config: %v", err)
-	}
 
 	issue1 := &types.Issue{
 		ID:          "old-1",
@@ -201,7 +186,7 @@ func TestRenamePrefixInDB(t *testing.T) {
 	}
 
 	issues := []*types.Issue{issue1}
-	err = renamePrefixInDB(ctx, "old", "new", issues)
+	err := renamePrefixInDB(ctx, "old", "new", issues)
 	if err != nil {
 		t.Fatalf("renamePrefixInDB failed: %v", err)
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads"
 	"github.com/steveyegge/beads/internal/config"
-	"github.com/steveyegge/beads/internal/configfile"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 )
 
@@ -154,29 +153,50 @@ bd.db
 				fmt.Fprintf(os.Stderr, "Warning: failed to create .gitignore: %v\n", err)
 				// Non-fatal - continue anyway
 			}
+		} else {
+		// Using custom database path (not in CWD/.beads)
+		// Create .beads directory next to the database for config.yaml
+		customBeadsDir := filepath.Join(initDBDir, ".beads")
+		if err := os.MkdirAll(customBeadsDir, 0750); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to create .beads directory at %s: %v\n", customBeadsDir, err)
+			os.Exit(1)
 		}
-	
+
+		// Write config.yaml directly to the custom .beads directory
+		// (config.SetIssuePrefix won't find it since it's not in CWD tree)
+		configPath := filepath.Join(customBeadsDir, "config.yaml")
+		configContent := fmt.Sprintf("issue-prefix: %s\n", prefix)
+		if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to write config.yaml: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 		// Ensure parent directory exists for the database
 		if err := os.MkdirAll(initDBDir, 0750); err != nil {
 		 fmt.Fprintf(os.Stderr, "Error: failed to create database directory %s: %v\n", initDBDir, err)
 		 os.Exit(1)
 		}
-		
+
 		store, err := sqlite.New(initDBPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to create database: %v\n", err)
 			os.Exit(1)
 		}
 
-		// Set the issue prefix in config
-		ctx := context.Background()
-		if err := store.SetConfig(ctx, "issue_prefix", prefix); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix: %v\n", err)
-		_ = store.Close()
-		os.Exit(1)
+		// Set the issue prefix in config.yaml (source of truth)
+		// For local .beads, use config.SetIssuePrefix which will find CWD/.beads
+		// For custom DB paths, we already wrote config.yaml above
+		if useLocalBeads {
+			if err := config.SetIssuePrefix(prefix); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: failed to set issue prefix in config.yaml: %v\n", err)
+				_ = store.Close()
+				os.Exit(1)
+			}
 		}
 
 		// Store the bd version in metadata (for version mismatch detection)
+		ctx := context.Background()
 		if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to store version metadata: %v\n", err)
 		// Non-fatal - continue anyway
@@ -209,15 +229,6 @@ bd.db
 			fmt.Printf("  Clone ID: %s\n", cloneID)
 		}
 	}
-
-		// Create config.json for explicit configuration
-		if useLocalBeads {
-			cfg := configfile.DefaultConfig(Version)
-			if err := cfg.Save(localBeadsDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to create config.json: %v\n", err)
-				// Non-fatal - continue anyway
-			}
-		}
 
 		// Check if git has existing issues to import (fresh clone scenario)
 		issueCount, jsonlPath := checkGitForIssues()

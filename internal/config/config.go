@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 var v *viper.Viper
@@ -299,4 +300,76 @@ func AllSettings() map[string]interface{} {
 		return map[string]interface{}{}
 	}
 	return v.AllSettings()
+}
+
+// SetIssuePrefix updates the issue-prefix in config.yaml
+// This is the source of truth for the project's issue prefix
+// In test environments without .beads directory, updates viper in-memory only
+func SetIssuePrefix(prefix string) error {
+	// Find the .beads directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	var beadsDir string
+	for dir := cwd; dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+		candidate := filepath.Join(dir, ".beads")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			beadsDir = candidate
+			break
+		}
+	}
+
+	if beadsDir == "" {
+		// No .beads directory found - just update viper in-memory (for tests)
+		if v != nil {
+			v.Set("issue-prefix", prefix)
+			return nil
+		}
+		return fmt.Errorf("no .beads directory found and viper not initialized")
+	}
+
+	configPath := filepath.Join(beadsDir, "config.yaml")
+
+	// Read existing config or use empty map
+	var configData map[string]interface{}
+	if data, err := os.ReadFile(configPath); err == nil {
+		if err := yaml.Unmarshal(data, &configData); err != nil {
+			return fmt.Errorf("failed to parse existing config: %w", err)
+		}
+	} else {
+		configData = make(map[string]interface{})
+	}
+
+	// Ensure configData is initialized (yaml.Unmarshal may leave it nil on empty file)
+	if configData == nil {
+		configData = make(map[string]interface{})
+	}
+
+	// Update issue-prefix
+	configData["issue-prefix"] = prefix
+
+	// Write back to file
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Update in-memory viper configuration
+	if v != nil {
+		v.Set("issue-prefix", prefix)
+	}
+
+	return nil
+}
+
+// GetIssuePrefix returns the issue-prefix from config.yaml
+// This is the canonical source of truth for the project's issue prefix
+func GetIssuePrefix() string {
+	return GetString("issue-prefix")
 }

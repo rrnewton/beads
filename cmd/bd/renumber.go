@@ -12,6 +12,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -64,8 +65,8 @@ Risks:
 			ctx := context.Background()
 
 		// Get prefix from config, or derive from first issue if not set
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
-		if err != nil || prefix == "" {
+		prefix := config.GetIssuePrefix()
+		if prefix == "" {
 			// Get any issue to derive prefix
 			issues, err := store.SearchIssues(ctx, "", types.IssueFilter{})
 			if err != nil || len(issues) == 0 {

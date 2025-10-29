@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/types"
 	_ "modernc.org/sqlite"
 )
@@ -21,19 +22,7 @@ func setupTestDB(t *testing.T) (*SQLiteStorage, func()) {
 	}
 
 	dbPath := filepath.Join(tmpDir, "test.db")
-	store, err := New(dbPath)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("failed to create storage: %v", err)
-	}
-
-	// CRITICAL (bd-166): Set issue_prefix to prevent "database not initialized" errors
-	ctx := context.Background()
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		store.Close()
-		os.RemoveAll(tmpDir)
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
+	store := newTestStore(t, dbPath)
 
 	cleanup := func() {
 		store.Close()
@@ -1292,6 +1281,16 @@ func TestMultipleStorageDistinctPaths(t *testing.T) {
 }
 
 func TestInMemoryDatabase(t *testing.T) {
+	// Initialize config package
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
+	// Set issue prefix in config
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
 	ctx := context.Background()
 
 	// Test that :memory: database works
@@ -1300,11 +1299,6 @@ func TestInMemoryDatabase(t *testing.T) {
 		t.Fatalf("failed to create in-memory storage: %v", err)
 	}
 	defer store.Close()
-
-	// Set issue_prefix (bd-166)
-	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Verify we can create and retrieve an issue
 	issue := &types.Issue{
@@ -1340,6 +1334,16 @@ func TestInMemoryDatabase(t *testing.T) {
 }
 
 func TestInMemorySharedCache(t *testing.T) {
+	// Initialize config package
+	if err := config.Initialize(); err != nil {
+		t.Fatalf("failed to initialize config: %v", err)
+	}
+
+	// Set issue prefix in config
+	if err := config.SetIssuePrefix("bd"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
 	ctx := context.Background()
 
 	// Create first connection
@@ -1348,11 +1352,6 @@ func TestInMemorySharedCache(t *testing.T) {
 		t.Fatalf("failed to create first in-memory storage: %v", err)
 	}
 	defer store1.Close()
-
-	// Set issue_prefix (bd-166)
-	if err := store1.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
-		t.Fatalf("failed to set issue_prefix: %v", err)
-	}
 
 	// Create an issue in the first connection
 	issue := &types.Issue{
