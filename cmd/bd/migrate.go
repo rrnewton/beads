@@ -252,9 +252,9 @@ This command:
 					}
 					fmt.Print("\nRemove these files? [y/N] ")
 					var response string
-					_, _ = fmt.Scanln(&response) // Ignore errors, default to empty string
+					_, _ = fmt.Scanln(&response)
 					if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-						fmt.Println("Cleanup canceled")
+						fmt.Println("Cleanup cancelled")
 						return
 					}
 				}
@@ -334,7 +334,7 @@ func getDBVersion(dbPath string) string {
 	if err != nil {
 		return "unknown"
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Try to read version from metadata table
 	var version string
@@ -414,7 +414,7 @@ func handleUpdateRepoID(dryRun bool, autoYes bool) {
 		}
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	// Get old repo ID
 	ctx := context.Background()
@@ -459,9 +459,9 @@ func handleUpdateRepoID(dryRun bool, autoYes bool) {
 		fmt.Printf("New repo ID:     %s\n\n", newRepoID[:8])
 		fmt.Printf("Continue? [y/N] ")
 		var response string
-		_, _ = fmt.Scanln(&response) // Ignore errors, default to empty string
+		_, _ = fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			fmt.Println("Canceled")
+			fmt.Println("Cancelled")
 			return
 		}
 	}

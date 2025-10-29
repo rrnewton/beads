@@ -386,15 +386,6 @@ func showDaemonHealth(global bool) {
 
 	fmt.Printf("  Version: %s\n", health.Version)
 	fmt.Printf("  Uptime: %s\n", formatUptime(health.Uptime))
-	fmt.Printf("  Cache Size: %d databases\n", health.CacheSize)
-	fmt.Printf("  Cache Hits: %d\n", health.CacheHits)
-	fmt.Printf("  Cache Misses: %d\n", health.CacheMisses)
-
-	if health.CacheHits+health.CacheMisses > 0 {
-		hitRate := float64(health.CacheHits) / float64(health.CacheHits+health.CacheMisses) * 100
-		fmt.Printf("  Cache Hit Rate: %.1f%%\n", hitRate)
-	}
-
 	fmt.Printf("  DB Response Time: %.2f ms\n", health.DBResponseTime)
 
 	if health.Error != "" {
@@ -454,17 +445,6 @@ func showDaemonMetrics(global bool) {
 
 	fmt.Printf("Uptime: %.1f seconds (%.1f minutes)\n", metrics.UptimeSeconds, metrics.UptimeSeconds/60)
 	fmt.Printf("Timestamp: %s\n\n", metrics.Timestamp.Format(time.RFC3339))
-
-	// Cache metrics
-	fmt.Printf("Cache Metrics:\n")
-	fmt.Printf("  Size: %d databases\n", metrics.CacheSize)
-	fmt.Printf("  Hits: %d\n", metrics.CacheHits)
-	fmt.Printf("  Misses: %d\n", metrics.CacheMisses)
-	if metrics.CacheHits+metrics.CacheMisses > 0 {
-		hitRate := float64(metrics.CacheHits) / float64(metrics.CacheHits+metrics.CacheMisses) * 100
-		fmt.Printf("  Hit Rate: %.1f%%\n", hitRate)
-	}
-	fmt.Printf("  Evictions: %d\n\n", metrics.CacheEvictions)
 
 	// Connection metrics
 	fmt.Printf("Connection Metrics:\n")
@@ -796,7 +776,7 @@ func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 	if err != nil {
 		return fmt.Errorf("failed to open JSONL: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	
 	// Parse all issues
 	var issues []*types.Issue
@@ -1319,5 +1299,30 @@ func runDaemonLoop(interval time.Duration, autoCommit, autoPush bool, logPath, p
 	doSync := createSyncFunc(ctx, store, autoCommit, autoPush, log)
 	doSync()
 
-	runEventLoop(ctx, cancel, ticker, doSync, server, serverErrChan, log)
+	// Choose event loop based on BEADS_DAEMON_MODE
+	daemonMode := os.Getenv("BEADS_DAEMON_MODE")
+	if daemonMode == "" {
+		daemonMode = "poll" // Default to polling for Phase 1
+	}
+
+	switch daemonMode {
+	case "events":
+		log.log("Using event-driven mode")
+		// For Phase 1: event-driven mode uses full sync on both export and import events
+		// TODO: Optimize to separate export-only and import-only triggers
+		jsonlPath := findJSONLPath()
+		if jsonlPath == "" {
+			log.log("Error: JSONL path not found, cannot use event-driven mode")
+			log.log("Falling back to polling mode")
+			runEventLoop(ctx, cancel, ticker, doSync, server, serverErrChan, log)
+		} else {
+			runEventDrivenLoop(ctx, cancel, server, serverErrChan, store, jsonlPath, doSync, doSync, log)
+		}
+	case "poll":
+		log.log("Using polling mode (interval: %v)", interval)
+		runEventLoop(ctx, cancel, ticker, doSync, server, serverErrChan, log)
+	default:
+		log.log("Unknown BEADS_DAEMON_MODE: %s (valid: poll, events), defaulting to poll", daemonMode)
+		runEventLoop(ctx, cancel, ticker, doSync, server, serverErrChan, log)
+	}
 }
