@@ -15,6 +15,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/steveyegge/beads"
+	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"golang.org/x/mod/semver"
 )
@@ -79,7 +80,7 @@ func autoImportIfNewer() {
 
 	// Get last import hash from DB metadata
 	ctx := context.Background()
-	lastHash, err := store.GetMetadata(ctx, "last_import_hash")
+	lastHash, err := store.GetMetadata(ctx, sqlite.MetadataKeyLastImportHash)
 	if err != nil {
 		// Metadata error - treat as first import rather than skipping (bd-663)
 		// This allows auto-import to recover from corrupt/missing metadata
@@ -227,14 +228,14 @@ func autoImportIfNewer() {
 	}
 
 	// Store new hash after successful import
-	if err := store.SetMetadata(ctx, "last_import_hash", currentHash); err != nil {
+	if err := store.SetMetadata(ctx, sqlite.MetadataKeyLastImportHash, currentHash); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to update last_import_hash after import: %v\n", err)
 		fmt.Fprintf(os.Stderr, "This may cause auto-import to retry the same import on next operation.\n")
 	}
 
 	// Store import timestamp (bd-159: for staleness detection)
 	importTime := time.Now().Format(time.RFC3339)
-	if err := store.SetMetadata(ctx, "last_import_time", importTime); err != nil {
+	if err := store.SetMetadata(ctx, sqlite.MetadataKeyLastImportTime, importTime); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to update last_import_time after import: %v\n", err)
 	}
 }
@@ -245,7 +246,7 @@ func checkVersionMismatch() {
 	ctx := context.Background()
 
 	// Get the database version (version that last wrote to this DB)
-	dbVersion, err := store.GetMetadata(ctx, "bd_version")
+	dbVersion, err := store.GetMetadata(ctx, sqlite.MetadataKeyBDVersion)
 	if err != nil {
 		// Metadata error - skip check (shouldn't happen, but be defensive)
 		if os.Getenv("BD_DEBUG") != "" {
@@ -256,7 +257,7 @@ func checkVersionMismatch() {
 
 	// If no version stored, this is an old database - store current version and continue
 	if dbVersion == "" {
-		_ = store.SetMetadata(ctx, "bd_version", Version)
+		_ = store.SetMetadata(ctx, sqlite.MetadataKeyBDVersion, Version)
 		return
 	}
 
@@ -282,13 +283,13 @@ func checkVersionMismatch() {
 			fmt.Fprintf(os.Stderr, "%s\n", yellow("⚠️  Your binary appears NEWER than the database."))
 			fmt.Fprintf(os.Stderr, "%s\n\n", yellow("⚠️  The database will be upgraded automatically."))
 			// Update stored version to current
-			_ = store.SetMetadata(ctx, "bd_version", Version)
+			_ = store.SetMetadata(ctx, sqlite.MetadataKeyBDVersion, Version)
 		}
 	}
 
 	// Always update the version metadata to track last-used version
 	// This is safe even if versions match (idempotent operation)
-	_ = store.SetMetadata(ctx, "bd_version", Version)
+	_ = store.SetMetadata(ctx, sqlite.MetadataKeyBDVersion, Version)
 }
 
 // markDirtyAndScheduleFlush marks the database as dirty and schedules a flush
@@ -711,7 +712,7 @@ func flushToJSONL() {
 		hasher := sha256.New()
 		hasher.Write(jsonlData)
 		exportedHash := hex.EncodeToString(hasher.Sum(nil))
-		if err := store.SetMetadata(ctx, "last_import_hash", exportedHash); err != nil {
+		if err := store.SetMetadata(ctx, sqlite.MetadataKeyLastImportHash, exportedHash); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update last_import_hash after export: %v\n", err)
 		}
 	}

@@ -197,7 +197,7 @@ bd.db
 
 		// Store the bd version in metadata (for version mismatch detection)
 		ctx := context.Background()
-		if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
+		if err := store.SetMetadata(ctx, sqlite.MetadataKeyBDVersion, Version); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to store version metadata: %v\n", err)
 		// Non-fatal - continue anyway
 		}
@@ -209,7 +209,7 @@ bd.db
 			fmt.Fprintf(os.Stderr, "Warning: could not compute repository ID: %v\n", err)
 		}
 	} else {
-		if err := store.SetMetadata(ctx, "repo_id", repoID); err != nil {
+		if err := store.SetMetadata(ctx, sqlite.MetadataKeyRepoID, repoID); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to set repo_id: %v\n", err)
 		} else if !quiet {
 			fmt.Printf("  Repository ID: %s\n", repoID[:8])
@@ -223,7 +223,7 @@ bd.db
 			fmt.Fprintf(os.Stderr, "Warning: could not compute clone ID: %v\n", err)
 		}
 	} else {
-		if err := store.SetMetadata(ctx, "clone_id", cloneID); err != nil {
+		if err := store.SetMetadata(ctx, sqlite.MetadataKeyCloneID, cloneID); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to set clone_id: %v\n", err)
 		} else if !quiet {
 			fmt.Printf("  Clone ID: %s\n", cloneID)

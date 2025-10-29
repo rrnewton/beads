@@ -18,6 +18,23 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Config keys for database configuration table
+const (
+	ConfigKeyCompactTier1Days      = "compact_tier1_days"
+	ConfigKeyCompactTier1DepLevels = "compact_tier1_dep_levels"
+	ConfigKeyCompactTier2Days      = "compact_tier2_days"
+	ConfigKeyCompactTier2Commits   = "compact_tier2_commits"
+)
+
+// Metadata keys for database metadata table
+const (
+	MetadataKeyBDVersion       = "bd_version"
+	MetadataKeyCloneID         = "clone_id"
+	MetadataKeyLastImportHash  = "last_import_hash"
+	MetadataKeyLastImportTime  = "last_import_time"
+	MetadataKeyRepoID          = "repo_id"
+)
+
 // SQLiteStorage implements the Storage interface using SQLite
 type SQLiteStorage struct {
 	db     *sql.DB

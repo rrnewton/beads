@@ -26,7 +26,7 @@ type CompactionCandidate struct {
 // - Not already compacted (compaction_level = 0)
 func (s *SQLiteStorage) GetTier1Candidates(ctx context.Context) ([]*CompactionCandidate, error) {
 	// Get configuration
-	daysStr, err := s.GetConfig(ctx, "compact_tier1_days")
+	daysStr, err := s.GetConfig(ctx, ConfigKeyCompactTier1Days)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get compact_tier1_days: %w", err)
 	}
@@ -34,7 +34,7 @@ func (s *SQLiteStorage) GetTier1Candidates(ctx context.Context) ([]*CompactionCa
 		daysStr = "30"
 	}
 
-	depthStr, err := s.GetConfig(ctx, "compact_tier1_dep_levels")
+	depthStr, err := s.GetConfig(ctx, ConfigKeyCompactTier1DepLevels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get compact_tier1_dep_levels: %w", err)
 	}
@@ -120,7 +120,7 @@ func (s *SQLiteStorage) GetTier1Candidates(ctx context.Context) ([]*CompactionCa
 // - Either has many commits (compact_tier2_commits) or many dependent issues
 func (s *SQLiteStorage) GetTier2Candidates(ctx context.Context) ([]*CompactionCandidate, error) {
 	// Get configuration
-	daysStr, err := s.GetConfig(ctx, "compact_tier2_days")
+	daysStr, err := s.GetConfig(ctx, ConfigKeyCompactTier2Days)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get compact_tier2_days: %w", err)
 	}
@@ -128,7 +128,7 @@ func (s *SQLiteStorage) GetTier2Candidates(ctx context.Context) ([]*CompactionCa
 		daysStr = "90"
 	}
 
-	commitsStr, err := s.GetConfig(ctx, "compact_tier2_commits")
+	commitsStr, err := s.GetConfig(ctx, ConfigKeyCompactTier2Commits)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get compact_tier2_commits: %w", err)
 	}

@@ -30,10 +30,10 @@ func setupTestStorage(t *testing.T) *sqlite.SQLiteStorage {
 
 	ctx := context.Background()
 	// Set compact-specific config in database
-	if err := store.SetConfig(ctx, "compact_tier1_days", "0"); err != nil {
+	if err := store.SetConfig(ctx, sqlite.ConfigKeyCompactTier1Days, "0"); err != nil {
 		t.Fatalf("failed to set config: %v", err)
 	}
-	if err := store.SetConfig(ctx, "compact_tier1_dep_levels", "2"); err != nil {
+	if err := store.SetConfig(ctx, sqlite.ConfigKeyCompactTier1DepLevels, "2"); err != nil {
 		t.Fatalf("failed to set config: %v", err)
 	}
 

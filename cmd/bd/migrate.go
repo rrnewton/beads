@@ -218,7 +218,7 @@ This command:
 			}
 
 			ctx := context.Background()
-			if err := store.SetMetadata(ctx, "bd_version", Version); err != nil {
+			if err := store.SetMetadata(ctx, sqlite.MetadataKeyBDVersion, Version); err != nil {
 				_ = store.Close()
 				if jsonOutput {
 					outputJSON(map[string]interface{}{
@@ -418,7 +418,7 @@ func handleUpdateRepoID(dryRun bool, autoYes bool) {
 
 	// Get old repo ID
 	ctx := context.Background()
-	oldRepoID, err := store.GetMetadata(ctx, "repo_id")
+	oldRepoID, err := store.GetMetadata(ctx, sqlite.MetadataKeyRepoID)
 	if err != nil && err.Error() != "metadata key not found: repo_id" {
 		if jsonOutput {
 			outputJSON(map[string]interface{}{
@@ -467,7 +467,7 @@ func handleUpdateRepoID(dryRun bool, autoYes bool) {
 	}
 
 	// Update repo ID
-	if err := store.SetMetadata(ctx, "repo_id", newRepoID); err != nil {
+	if err := store.SetMetadata(ctx, sqlite.MetadataKeyRepoID, newRepoID); err != nil {
 		if jsonOutput {
 			outputJSON(map[string]interface{}{
 				"error":   "update_failed",

@@ -833,7 +833,7 @@ func validateDatabaseFingerprint(store storage.Storage, log *daemonLogger) error
 	ctx := context.Background()
 
 	// Get stored repo ID
-	storedRepoID, err := store.GetMetadata(ctx, "repo_id")
+	storedRepoID, err := store.GetMetadata(ctx, sqlite.MetadataKeyRepoID)
 	if err != nil && err.Error() != "metadata key not found: repo_id" {
 		return fmt.Errorf("failed to read repo_id: %w", err)
 	}
@@ -1247,7 +1247,7 @@ func runDaemonLoop(interval time.Duration, autoCommit, autoPush bool, logPath, p
 
 	// Validate schema version matches daemon version
 	versionCtx := context.Background()
-	dbVersion, err := store.GetMetadata(versionCtx, "bd_version")
+	dbVersion, err := store.GetMetadata(versionCtx, sqlite.MetadataKeyBDVersion)
 	if err != nil && err.Error() != "metadata key not found: bd_version" {
 		log.log("Error: failed to read database version: %v", err)
 		os.Exit(1)
@@ -1275,7 +1275,7 @@ func runDaemonLoop(interval time.Duration, autoCommit, autoPush bool, logPath, p
 	} else if dbVersion == "" {
 		// Old database without version metadata - set it now
 		log.log("Warning: Database missing version metadata, setting to %s", Version)
-		if err := store.SetMetadata(versionCtx, "bd_version", Version); err != nil {
+		if err := store.SetMetadata(versionCtx, sqlite.MetadataKeyBDVersion, Version); err != nil {
 			log.log("Error: failed to set database version: %v", err)
 			os.Exit(1)
 		}
