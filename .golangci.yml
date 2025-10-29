@@ -5,13 +5,10 @@ run:
   tests: false
 
 linters:
-  disable-all: true  # Disable all default linters
+  default: none
   enable:
     - errcheck
-    # - gosec  # Disabled temporarily
-    # - gocyclo  # Disabled: high complexity acceptable for large functions (see LINTING.md)
     - misspell
-    # - unconvert
 
 linters-settings:
   dupl:
