@@ -1,4 +1,5 @@
 name: CI
+# Retry to debug test failures
 
 on:
   push:
