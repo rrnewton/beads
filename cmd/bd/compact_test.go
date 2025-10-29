@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -18,7 +19,10 @@ func TestCompactDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqliteStore := newTestStore(t, dbPath)
+	sqliteStore, err := sqlite.New(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer sqliteStore.Close()
 
 	ctx := context.Background()
@@ -143,7 +147,10 @@ func TestCompactStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sqliteStore := newTestStore(t, dbPath)
+	sqliteStore, err := sqlite.New(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer sqliteStore.Close()
 
 	ctx := context.Background()

@@ -78,9 +78,7 @@ func (s *Server) validateDatabaseBinding(req *Request) error {
 		return nil
 	}
 
-	// For multi-database daemons: If a cwd is provided, verify the client expects
-	// the database that would be selected for that cwd
-	// Note: Multi-database support removed, always use default storage
+	// Local daemon always uses single storage
 	daemonDB := s.storage.Path()
 
 	// Normalize both paths for comparison (resolve symlinks, clean paths)
@@ -300,9 +298,6 @@ func (s *Server) handleHealth(req *Request) Response {
 		status = "degraded"
 	}
 
-	// Cache removed - set to 0 for backward compatibility
-	cacheSize := 0
-
 	// Check version compatibility
 	compatible := true
 	if req.ClientVersion != "" {
@@ -317,9 +312,6 @@ func (s *Server) handleHealth(req *Request) Response {
 		ClientVersion:  req.ClientVersion,
 		Compatible:     compatible,
 		Uptime:         time.Since(s.startTime).Seconds(),
-		CacheSize:      cacheSize,
-		CacheHits:      0, // Cache removed
-		CacheMisses:    0, // Cache removed
 		DBResponseTime: dbResponseMs,
 		ActiveConns:    atomic.LoadInt32(&s.activeConns),
 		MaxConns:       s.maxConns,
@@ -339,13 +331,7 @@ func (s *Server) handleHealth(req *Request) Response {
 }
 
 func (s *Server) handleMetrics(_ *Request) Response {
-	// Cache removed - set to 0 for backward compatibility
-	cacheSize := 0
-
 	snapshot := s.metrics.Snapshot(
-		0, // cacheHits - cache removed
-		0, // cacheMisses - cache removed
-		cacheSize,
 		int(atomic.LoadInt32(&s.activeConns)),
 	)
 

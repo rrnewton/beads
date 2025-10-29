@@ -435,90 +435,6 @@ func intPtr(i int) *int {
 	return &i
 }
 
-func TestCountReferences(t *testing.T) {
-	allIssues := []*types.Issue{
-		{
-			ID:          "bd-1",
-			Title:       "Issue 1",
-			Description: "This mentions bd-2 and bd-3",
-			Design:      "Design mentions bd-2 twice: bd-2 and bd-2",
-			Notes:       "Notes mention bd-3",
-		},
-		{
-			ID:          "bd-2",
-			Title:       "Issue 2",
-			Description: "This mentions bd-1",
-		},
-		{
-			ID:          "bd-3",
-			Title:       "Issue 3",
-			Description: "No mentions here",
-		},
-		{
-			ID:          "bd-10",
-			Title:       "Issue 10",
-			Description: "This has bd-100 but not bd-10 itself",
-		},
-	}
-
-	allDeps := map[string][]*types.Dependency{
-		"bd-1": {
-			{IssueID: "bd-1", DependsOnID: "bd-2", Type: types.DepBlocks},
-		},
-		"bd-2": {
-			{IssueID: "bd-2", DependsOnID: "bd-3", Type: types.DepBlocks},
-		},
-	}
-
-	tests := []struct {
-		name          string
-		issueID       string
-		expectedCount int
-	}{
-		{
-			name:    "bd-1 - one text mention, one dependency",
-			issueID: "bd-1",
-			// Text: bd-2's description mentions bd-1 (1)
-			// Deps: bd-1 → bd-2 (1)
-			expectedCount: 2,
-		},
-		{
-			name:    "bd-2 - multiple text mentions, two dependencies",
-			issueID: "bd-2",
-			// Text: bd-1's description mentions bd-2 (1) + bd-1's design mentions bd-2 three times (3) = 4
-			//       (design has: "mentions bd-2" + "bd-2 and" + "bd-2")
-			// Deps: bd-1 → bd-2 (1) + bd-2 → bd-3 (1) = 2
-			expectedCount: 6,
-		},
-		{
-			name:    "bd-3 - some text mentions, one dependency",
-			issueID: "bd-3",
-			// Text: bd-1's description (1) + bd-1's notes (1) = 2
-			// Deps: bd-2 → bd-3 (1)
-			expectedCount: 3,
-		},
-		{
-			name:    "bd-10 - no mentions (bd-100 doesn't count)",
-			issueID: "bd-10",
-			// Text: bd-100 in bd-10's description doesn't match \bbd-10\b = 0
-			// Deps: none = 0
-			expectedCount: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			count, err := countReferences(tt.issueID, allIssues, allDeps)
-			if err != nil {
-				t.Fatalf("countReferences failed: %v", err)
-			}
-			if count != tt.expectedCount {
-				t.Errorf("expected count %d, got %d", tt.expectedCount, count)
-			}
-		})
-	}
-}
-
 func TestScoreCollisions(t *testing.T) {
 	// Create temporary database
 	tmpDir, err := os.MkdirTemp("", "score-collision-test-*")
@@ -607,28 +523,24 @@ func TestScoreCollisions(t *testing.T) {
 	// Create collision details (simulated)
 	collisions := []*CollisionDetail{
 		{
-			ID:             "bd-1",
-			IncomingIssue:  issue1,
-			ExistingIssue:  issue1,
-			ReferenceScore: 0, // Will be calculated
+			ID:            "bd-1",
+			IncomingIssue: issue1,
+			ExistingIssue: issue1,
 		},
 		{
-			ID:             "bd-2",
-			IncomingIssue:  issue2,
-			ExistingIssue:  issue2,
-			ReferenceScore: 0, // Will be calculated
+			ID:            "bd-2",
+			IncomingIssue: issue2,
+			ExistingIssue: issue2,
 		},
 		{
-			ID:             "bd-3",
-			IncomingIssue:  issue3,
-			ExistingIssue:  issue3,
-			ReferenceScore: 0, // Will be calculated
+			ID:            "bd-3",
+			IncomingIssue: issue3,
+			ExistingIssue: issue3,
 		},
 		{
-			ID:             "bd-4",
-			IncomingIssue:  issue4,
-			ExistingIssue:  issue4,
-			ReferenceScore: 0, // Will be calculated
+			ID:            "bd-4",
+			IncomingIssue: issue4,
+			ExistingIssue: issue4,
 		},
 	}
 
@@ -640,96 +552,19 @@ func TestScoreCollisions(t *testing.T) {
 		t.Fatalf("ScoreCollisions failed: %v", err)
 	}
 
-	// Verify scores were calculated
-	// bd-4: 0 references (no mentions, no deps)
-	// bd-1: 1 reference (bd-1 → bd-2 dependency)
-	// bd-3: 1 reference (bd-3 → bd-2 dependency)
-	// bd-2: high references (mentioned in bd-1, bd-3 multiple times + 2 deps as target)
-	//       bd-1 desc (1) + bd-3 desc (3: "bd-2 multiple", "bd-2 and", "bd-2") + bd-3 notes (1) + 2 deps = 7
-
-	if collisions[0].ID != "bd-4" {
-		t.Errorf("expected first collision to be bd-4 (lowest score), got %s", collisions[0].ID)
-	}
-	if collisions[0].ReferenceScore != 0 {
-		t.Errorf("expected bd-4 to have score 0, got %d", collisions[0].ReferenceScore)
-	}
-
-	// bd-2 should be last (highest score)
-	lastIdx := len(collisions) - 1
-	if collisions[lastIdx].ID != "bd-2" {
-		t.Errorf("expected last collision to be bd-2 (highest score), got %s", collisions[lastIdx].ID)
-	}
-	if collisions[lastIdx].ReferenceScore != 7 {
-		t.Errorf("expected bd-2 to have score 7, got %d", collisions[lastIdx].ReferenceScore)
-	}
-
-	// Verify sorting (ascending order)
-	for i := 1; i < len(collisions); i++ {
-		if collisions[i].ReferenceScore < collisions[i-1].ReferenceScore {
-			t.Errorf("collisions not sorted: collision[%d] score %d < collision[%d] score %d",
-				i, collisions[i].ReferenceScore, i-1, collisions[i-1].ReferenceScore)
+	// Verify RemapIncoming was set based on content hashes (bd-95)
+	// ScoreCollisions now uses content-based hashing instead of reference counting
+	// Each collision should have RemapIncoming set based on hash comparison
+	for _, collision := range collisions {
+		existingHash := hashIssueContent(collision.ExistingIssue)
+		incomingHash := hashIssueContent(collision.IncomingIssue)
+		expectedRemapIncoming := existingHash < incomingHash
+		
+		if collision.RemapIncoming != expectedRemapIncoming {
+			t.Errorf("collision %s: RemapIncoming=%v but expected %v (existingHash=%s, incomingHash=%s)",
+				collision.ID, collision.RemapIncoming, expectedRemapIncoming,
+				existingHash[:8], incomingHash[:8])
 		}
-	}
-}
-
-func TestCountReferencesWordBoundary(t *testing.T) {
-	// Test that word boundaries work correctly
-	allIssues := []*types.Issue{
-		{
-			ID:          "bd-1",
-			Description: "bd-10 and bd-100 and bd-1 and bd-11",
-		},
-		{
-			ID:          "bd-10",
-			Description: "bd-1 and bd-100",
-		},
-	}
-
-	allDeps := map[string][]*types.Dependency{}
-
-	tests := []struct {
-		name          string
-		issueID       string
-		expectedCount int
-		description   string
-	}{
-		{
-			name:          "bd-1 exact match",
-			issueID:       "bd-1",
-			expectedCount: 2, // bd-10's desc mentions bd-1 (1) + bd-1's desc mentions bd-1 (1) = 2
-			// Wait, bd-1's desc shouldn't count itself
-			// So: bd-10's desc mentions bd-1 (1)
-		},
-		{
-			name:          "bd-10 exact match",
-			issueID:       "bd-10",
-			expectedCount: 1, // bd-1's desc mentions bd-10 (1)
-		},
-		{
-			name:          "bd-100 exact match",
-			issueID:       "bd-100",
-			expectedCount: 2, // bd-1's desc (1) + bd-10's desc (1)
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			count, err := countReferences(tt.issueID, allIssues, allDeps)
-			if err != nil {
-				t.Fatalf("countReferences failed: %v", err)
-			}
-
-			// Adjust expected based on actual counting logic
-			// countReferences skips the issue itself
-			expected := tt.expectedCount
-			if tt.issueID == testIssueBD1 {
-				expected = 1 // only bd-10's description
-			}
-
-			if count != expected {
-				t.Errorf("expected count %d, got %d", expected, count)
-			}
-		})
 	}
 }
 
@@ -832,35 +667,62 @@ func TestRemapCollisions(t *testing.T) {
 		t.Fatalf("failed to create existing issue: %v", err)
 	}
 
+	// Create existing issues in DB that will collide with incoming issues
+	dbIssue2 := &types.Issue{
+		ID:          "bd-2",
+		Title:       "Existing issue bd-2",
+		Description: "Original content for bd-2",
+		Status:      types.StatusOpen,
+		Priority:    2,
+		IssueType:   types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, dbIssue2, "test"); err != nil {
+		t.Fatalf("failed to create dbIssue2: %v", err)
+	}
+
+	dbIssue3 := &types.Issue{
+		ID:          "bd-3",
+		Title:       "Existing issue bd-3",
+		Description: "Original content for bd-3",
+		Status:      types.StatusOpen,
+		Priority:    2,
+		IssueType:   types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, dbIssue3, "test"); err != nil {
+		t.Fatalf("failed to create dbIssue3: %v", err)
+	}
+
 	// Create collisions (incoming issues with same IDs as DB but different content)
 	collision1 := &CollisionDetail{
-		ID: "bd-2",
+		ID:            "bd-2",
+		ExistingIssue: dbIssue2,
 		IncomingIssue: &types.Issue{
 			ID:          "bd-2",
-			Title:       "Collision 2 (has fewer references)",
+			Title:       "Collision 2",
 			Description: "This is different content",
 			Status:      types.StatusOpen,
 			Priority:    1,
 			IssueType:   types.TypeTask,
 		},
-		ReferenceScore: 2, // Fewer references
+		RemapIncoming: true, // Incoming will be remapped
 	}
 
 	collision2 := &CollisionDetail{
-		ID: "bd-3",
+		ID:            "bd-3",
+		ExistingIssue: dbIssue3,
 		IncomingIssue: &types.Issue{
 			ID:          "bd-3",
-			Title:       "Collision 3 (has more references)",
+			Title:       "Collision 3",
 			Description: "Different content for bd-3",
 			Status:      types.StatusOpen,
 			Priority:    1,
 			IssueType:   types.TypeTask,
 		},
-		ReferenceScore: 5, // More references
+		RemapIncoming: true, // Incoming will be remapped
 	}
 
 	collisions := []*CollisionDetail{collision1, collision2}
-	allIssues := []*types.Issue{existingIssue, collision1.IncomingIssue, collision2.IncomingIssue}
+	allIssues := []*types.Issue{existingIssue, dbIssue2, dbIssue3, collision1.IncomingIssue, collision2.IncomingIssue}
 
 	// Remap collisions
 	idMapping, err := RemapCollisions(ctx, store, collisions, allIssues)
@@ -890,7 +752,7 @@ func TestRemapCollisions(t *testing.T) {
 	if remappedIssue2 == nil {
 		t.Fatalf("remapped issue %s not found", newID2)
 	}
-	if remappedIssue2.Title != "Collision 2 (has fewer references)" {
+	if remappedIssue2.Title != "Collision 2" {
 		t.Errorf("unexpected title for remapped issue: %s", remappedIssue2.Title)
 	}
 
@@ -940,14 +802,14 @@ func BenchmarkReplaceIDReferencesWithCache(b *testing.B) {
 		"Also bd-6, bd-7, bd-8, bd-9, and bd-10 are referenced here."
 
 	// Pre-compile the cache (this is done once in real usage)
-	cache, err := buildReplacementCache(idMapping)
+	cache, err := BuildReplacementCache(idMapping)
 	if err != nil {
 		b.Fatalf("failed to build cache: %v", err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = replaceIDReferencesWithCache(text, cache)
+		_ = ReplaceIDReferencesWithCache(text, cache)
 	}
 }
 
@@ -976,12 +838,155 @@ func BenchmarkReplaceIDReferencesMultipleTexts(b *testing.B) {
 	})
 
 	b.Run("with cache", func(b *testing.B) {
-		cache, _ := buildReplacementCache(idMapping)
+		cache, _ := BuildReplacementCache(idMapping)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for _, text := range texts {
-				_ = replaceIDReferencesWithCache(text, cache)
+				_ = ReplaceIDReferencesWithCache(text, cache)
 			}
 		}
 	})
+}
+
+// TestDetectCollisionsReadOnly verifies that DetectCollisions does not modify the database
+func TestDetectCollisionsReadOnly(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "collision-readonly-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	store, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
+	// Create an issue in the database
+	dbIssue := &types.Issue{
+		ID:          "bd-1",
+		Title:       "Original issue",
+		Description: "Original content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, dbIssue, "test"); err != nil {
+		t.Fatalf("failed to create DB issue: %v", err)
+	}
+
+	// Create incoming issue with SAME CONTENT but DIFFERENT ID (rename scenario)
+	incomingIssue := &types.Issue{
+		ID:          "bd-100",
+		Title:       "Original issue",
+		Description: "Original content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+
+	// Call DetectCollisions
+	result, err := DetectCollisions(ctx, store, []*types.Issue{incomingIssue})
+	if err != nil {
+		t.Fatalf("DetectCollisions failed: %v", err)
+	}
+
+	// Verify rename was detected
+	if len(result.Renames) != 1 {
+		t.Fatalf("expected 1 rename, got %d", len(result.Renames))
+	}
+	if result.Renames[0].OldID != "bd-1" {
+		t.Errorf("expected OldID bd-1, got %s", result.Renames[0].OldID)
+	}
+	if result.Renames[0].NewID != "bd-100" {
+		t.Errorf("expected NewID bd-100, got %s", result.Renames[0].NewID)
+	}
+
+	// CRITICAL: Verify the old issue still exists in the database (not deleted)
+	oldIssue, err := store.GetIssue(ctx, "bd-1")
+	if err != nil {
+		t.Fatalf("failed to get old issue: %v", err)
+	}
+	if oldIssue == nil {
+		t.Fatal("old issue bd-1 was deleted - DetectCollisions is not read-only!")
+	}
+	if oldIssue.Title != "Original issue" {
+		t.Errorf("old issue was modified - expected title 'Original issue', got '%s'", oldIssue.Title)
+	}
+}
+
+// TestApplyCollisionResolution verifies that ApplyCollisionResolution correctly applies renames
+func TestApplyCollisionResolution(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "apply-resolution-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "test.db")
+	store, err := New(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
+	// Create an issue to be renamed
+	oldIssue := &types.Issue{
+		ID:          "bd-1",
+		Title:       "Issue to rename",
+		Description: "Content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, oldIssue, "test"); err != nil {
+		t.Fatalf("failed to create old issue: %v", err)
+	}
+
+	// Create a collision result with a rename
+	newIssue := &types.Issue{
+		ID:          "bd-100",
+		Title:       "Issue to rename",
+		Description: "Content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+	result := &CollisionResult{
+		Renames: []*RenameDetail{
+			{
+				OldID: "bd-1",
+				NewID: "bd-100",
+				Issue: newIssue,
+			},
+		},
+	}
+
+	// Apply the resolution
+	emptyMapping := make(map[string]string)
+	if err := ApplyCollisionResolution(ctx, store, result, emptyMapping); err != nil {
+		t.Fatalf("ApplyCollisionResolution failed: %v", err)
+	}
+
+	// Verify old issue was deleted
+	oldDeleted, err := store.GetIssue(ctx, "bd-1")
+	if err != nil {
+		t.Fatalf("failed to check old issue: %v", err)
+	}
+	if oldDeleted != nil {
+		t.Error("old issue bd-1 was not deleted")
+	}
 }

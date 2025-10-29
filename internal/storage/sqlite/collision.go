@@ -2,9 +2,9 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/steveyegge/beads/internal/types"
@@ -15,6 +15,14 @@ type CollisionResult struct {
 	ExactMatches []string           // IDs that match exactly (idempotent import)
 	Collisions   []*CollisionDetail // Issues with same ID but different content
 	NewIssues    []string           // IDs that don't exist in DB yet
+	Renames      []*RenameDetail    // Issues with same content but different ID (renames)
+}
+
+// RenameDetail captures a rename/remap detected during collision detection
+type RenameDetail struct {
+	OldID string        // ID in database (to be deleted)
+	NewID string        // ID in incoming (to be created)
+	Issue *types.Issue  // The issue with new ID
 }
 
 // CollisionDetail provides detailed information about a collision
@@ -23,7 +31,7 @@ type CollisionDetail struct {
 	IncomingIssue     *types.Issue  // The issue from the import file
 	ExistingIssue     *types.Issue  // The issue currently in the database
 	ConflictingFields []string      // List of field names that differ
-	ReferenceScore    int           // Number of references to this issue (for scoring)
+	RemapIncoming     bool          // If true, remap incoming; if false, remap existing
 }
 
 // DetectCollisions compares incoming JSONL issues against DB state
@@ -31,6 +39,7 @@ type CollisionDetail struct {
 //  1. Exact match (idempotent) - ID and content are identical
 //  2. ID match but different content (collision) - same ID, different fields
 //  3. New issue - ID doesn't exist in DB
+//  4. Rename detected - Different ID but same content (from prior remap)
 //
 // Returns a CollisionResult categorizing all incoming issues.
 func DetectCollisions(ctx context.Context, s *SQLiteStorage, incomingIssues []*types.Issue) (*CollisionResult, error) {
@@ -44,20 +53,49 @@ func DetectCollisions(ctx context.Context, s *SQLiteStorage, incomingIssues []*t
 	// Group by content hash to find duplicates with different IDs
 	deduped := deduplicateIncomingIssues(incomingIssues)
 
+	// Phase 2: Build content hash map of all DB issues
+	// This allows us to detect renames (different ID, same content)
+	dbIssues, err := s.SearchIssues(ctx, "", types.IssueFilter{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all DB issues: %w", err)
+	}
+	
+	contentToDBIssue := make(map[string]*types.Issue)
+	for _, dbIssue := range dbIssues {
+		hash := hashIssueContent(dbIssue)
+		contentToDBIssue[hash] = dbIssue
+	}
+
+	// Phase 3: Process each incoming issue
 	for _, incoming := range deduped {
-		// Check if issue exists in database
+		incomingHash := hashIssueContent(incoming)
+		
+		// Check if issue exists in database by ID
 		existing, err := s.GetIssue(ctx, incoming.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check issue %s: %w", incoming.ID, err)
 		}
 
 		if existing == nil {
-			// Issue doesn't exist in DB - it's new
-			result.NewIssues = append(result.NewIssues, incoming.ID)
+			// Issue doesn't exist by ID - check for rename by content
+			if dbMatch, found := contentToDBIssue[incomingHash]; found {
+				// Same content, different ID - this is a rename/remap
+				// The incoming ID is the NEW canonical ID, existing DB ID is OLD
+				// Record this as a rename to be handled later (read-only detection)
+				result.Renames = append(result.Renames, &RenameDetail{
+					OldID: dbMatch.ID,
+					NewID: incoming.ID,
+					Issue: incoming,
+				})
+				// Don't add to NewIssues - will be handled by ApplyCollisionResolution
+			} else {
+				// Truly new issue
+				result.NewIssues = append(result.NewIssues, incoming.ID)
+			}
 			continue
 		}
 
-		// Issue exists - compare content
+		// Issue exists by ID - compare content
 		conflicts := compareIssues(existing, incoming)
 		if len(conflicts) == 0 {
 			// No differences - exact match (idempotent)
@@ -146,89 +184,90 @@ func equalStringPtr(a, b *string) bool {
 	return *a == *b
 }
 
-// ScoreCollisions calculates reference scores for all colliding issues and sorts them
-// by score ascending (fewest references first). This minimizes the total number of
-// updates needed during renumbering - issues with fewer references are renumbered first.
+// hashIssueContent creates a deterministic hash of an issue's content.
+// Uses all substantive fields (excluding timestamps and ID) to ensure
+// that identical content produces identical hashes across all clones.
+func hashIssueContent(issue *types.Issue) string {
+	h := sha256.New()
+	
+	// Hash all substantive fields in a stable order
+	h.Write([]byte(issue.Title))
+	h.Write([]byte{0}) // separator
+	h.Write([]byte(issue.Description))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.Design))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.AcceptanceCriteria))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.Notes))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.Status))
+	h.Write([]byte{0})
+	h.Write([]byte(fmt.Sprintf("%d", issue.Priority)))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.IssueType))
+	h.Write([]byte{0})
+	h.Write([]byte(issue.Assignee))
+	h.Write([]byte{0})
+	
+	if issue.ExternalRef != nil {
+		h.Write([]byte(*issue.ExternalRef))
+	}
+	
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// ApplyCollisionResolution applies the modifications detected during collision detection.
+// This function handles:
+// 1. Rename deletions (delete old IDs for renamed issues)
+// 2. Creating remapped issues (based on mapping)
+// 3. Updating all references to use new IDs
 //
-// Reference score = text mentions + dependency references
-func ScoreCollisions(ctx context.Context, s *SQLiteStorage, collisions []*CollisionDetail, allIssues []*types.Issue) error {
-	// Get all dependency records for efficient lookup
-	allDeps, err := s.GetAllDependencyRecords(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get dependency records: %w", err)
-	}
-
-	// Calculate reference score for each collision
-	for _, collision := range collisions {
-		score, err := countReferences(collision.ID, allIssues, allDeps)
-		if err != nil {
-			return fmt.Errorf("failed to count references for %s: %w", collision.ID, err)
+// This is the write-phase counterpart to the read-only DetectCollisions.
+func ApplyCollisionResolution(ctx context.Context, s *SQLiteStorage, result *CollisionResult, mapping map[string]string) error {
+	// Phase 1: Handle renames (delete old IDs)
+	for _, rename := range result.Renames {
+		if err := s.DeleteIssue(ctx, rename.OldID); err != nil {
+			return fmt.Errorf("failed to delete renamed issue %s (renamed to %s): %w",
+				rename.OldID, rename.NewID, err)
 		}
-		collision.ReferenceScore = score
 	}
 
-	// Sort collisions by reference score ascending (fewest first)
-	sort.Slice(collisions, func(i, j int) bool {
-		return collisions[i].ReferenceScore < collisions[j].ReferenceScore
-	})
+	// Phase 2: Update references using the mapping
+	if len(mapping) > 0 {
+		if err := updateReferences(ctx, s, mapping); err != nil {
+			return fmt.Errorf("failed to update references: %w", err)
+		}
+	}
 
 	return nil
 }
 
-// countReferences counts how many times an issue ID is referenced
-// Returns: text mentions + dependency references
-func countReferences(issueID string, allIssues []*types.Issue, allDeps map[string][]*types.Dependency) (int, error) {
-	count := 0
-
-	// Count text mentions in all issues' text fields
-	// Use word boundary regex to match exact IDs (e.g., "bd-10" but not "bd-100")
-	pattern := fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(issueID))
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return 0, fmt.Errorf("failed to compile regex for %s: %w", issueID, err)
+// ScoreCollisions determines which version of each colliding issue to keep vs. remap.
+// Uses deterministic content-based hashing to ensure all clones make the same decision.
+//
+// Decision process:
+//  1. Hash both versions (existing and incoming) based on content
+//  2. Keep the version with the lexicographically LOWER hash
+//  3. Mark the other version for remapping
+//
+// This ensures:
+//  - Deterministic: same collision always produces same result
+//  - Symmetric: works regardless of which clone syncs first
+//  - Idempotent: converges to same state across all clones
+func ScoreCollisions(ctx context.Context, s *SQLiteStorage, collisions []*CollisionDetail, allIssues []*types.Issue) error {
+	// Determine which version to keep for each collision
+	for _, collision := range collisions {
+		existingHash := hashIssueContent(collision.ExistingIssue)
+		incomingHash := hashIssueContent(collision.IncomingIssue)
+		
+		// Keep the version with lower hash (deterministic winner)
+		// If incoming has lower hash, we need to remap existing and keep incoming
+		// If existing has lower hash, we need to remap incoming and keep existing
+		collision.RemapIncoming = existingHash < incomingHash
 	}
 
-	for _, issue := range allIssues {
-		// Skip counting references in the issue itself
-		if issue.ID == issueID {
-			continue
-		}
-
-		// Count mentions in description
-		count += len(re.FindAllString(issue.Description, -1))
-
-		// Count mentions in design
-		count += len(re.FindAllString(issue.Design, -1))
-
-		// Count mentions in notes
-		count += len(re.FindAllString(issue.Notes, -1))
-
-		// Count mentions in acceptance criteria
-		count += len(re.FindAllString(issue.AcceptanceCriteria, -1))
-	}
-
-	// Count dependency references
-	// An issue can be referenced as either IssueID or DependsOnID
-	for _, deps := range allDeps {
-		for _, dep := range deps {
-			// Skip self-references
-			if dep.IssueID == issueID && dep.DependsOnID == issueID {
-				continue
-			}
-
-			// Count if this issue is the source (IssueID)
-			if dep.IssueID == issueID {
-				count++
-			}
-
-			// Count if this issue is the target (DependsOnID)
-			if dep.DependsOnID == issueID {
-				count++
-			}
-		}
-	}
-
-	return count, nil
+	return nil
 }
 
 // deduplicateIncomingIssues removes content-duplicate issues within the incoming batch
@@ -286,9 +325,15 @@ func deduplicateIncomingIssues(issues []*types.Issue) []*types.Issue {
 	return result
 }
 
-// RemapCollisions handles ID remapping for colliding issues
-// Takes sorted collisions (fewest references first) and remaps them to new IDs
-// Returns a map of old ID -> new ID for reporting
+// RemapCollisions handles ID remapping for colliding issues based on content hash.
+// For each collision, either the incoming or existing issue is remapped (determined by ScoreCollisions).
+// Returns a map of old ID -> new ID for reporting.
+//
+// Process:
+//  1. If RemapIncoming=true: remap incoming issue, keep existing
+//  2. If RemapIncoming=false: remap existing issue, replace with incoming
+//
+// This ensures deterministic, symmetric collision resolution across all clones.
 //
 // NOTE: This function is not atomic - it performs multiple separate database operations.
 // If an error occurs partway through, some issues may be created without their references
@@ -302,8 +347,23 @@ func RemapCollisions(ctx context.Context, s *SQLiteStorage, collisions []*Collis
 		return nil, fmt.Errorf("failed to sync ID counters: %w", err)
 	}
 
-	// For each collision (in order of ascending reference score)
+	// Step 1: Collect ALL dependencies before any modifications
+	// This prevents CASCADE DELETE from losing dependency information
+	allDepsBeforeRemap, err := s.GetAllDependencyRecords(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all dependencies: %w", err)
+	}
+
+	// Step 2: Process each collision based on which version should be remapped
 	for _, collision := range collisions {
+		// Skip collisions with nil issues (shouldn't happen but be defensive)
+		if collision.IncomingIssue == nil {
+			return nil, fmt.Errorf("collision %s has nil IncomingIssue", collision.ID)
+		}
+		if collision.ExistingIssue == nil {
+			return nil, fmt.Errorf("collision %s has nil ExistingIssue", collision.ID)
+		}
+
 		oldID := collision.ID
 
 		// Allocate new ID using atomic counter
@@ -317,20 +377,95 @@ func RemapCollisions(ctx context.Context, s *SQLiteStorage, collisions []*Collis
 		}
 		newID := fmt.Sprintf("%s-%d", prefix, nextID)
 
-		// Record mapping
-		idMapping[oldID] = newID
-
-		// Update the issue ID in the incoming issue
-		collision.IncomingIssue.ID = newID
-
-		// Create the issue with new ID
-		// Note: CreateIssue will use the ID we set
-		if err := s.CreateIssue(ctx, collision.IncomingIssue, "import-remap"); err != nil {
-			return nil, fmt.Errorf("failed to create remapped issue %s -> %s: %w", oldID, newID, err)
+		if collision.RemapIncoming {
+			// Incoming has higher hash -> remap incoming, keep existing
+			// Record mapping
+			idMapping[oldID] = newID
+			
+			// Update incoming issue ID
+			collision.IncomingIssue.ID = newID
+			
+			// Create incoming issue with new ID
+			if err := s.CreateIssue(ctx, collision.IncomingIssue, "import-remap"); err != nil {
+				return nil, fmt.Errorf("failed to create remapped incoming issue %s -> %s: %w", oldID, newID, err)
+			}
+		} else {
+			// Existing has higher hash -> remap existing, replace with incoming
+			// Record mapping FIRST before any operations
+			idMapping[oldID] = newID
+			
+			// Create a copy of existing issue with new ID
+			existingCopy := *collision.ExistingIssue
+			existingCopy.ID = newID
+			
+			if err := s.CreateIssue(ctx, &existingCopy, "import-remap"); err != nil {
+				return nil, fmt.Errorf("failed to create remapped existing issue %s -> %s: %w", oldID, newID, err)
+			}
+			
+			// Create incoming issue with original ID (this will REPLACE when we delete old ID)
+			// We do this BEFORE deleting so both issues exist temporarily
+			// Note: This will fail if incoming ID already exists, which is expected in this flow
+			// So we skip this step and do it after deletion
+			
+			// Note: We do NOT copy dependencies here - DeleteIssue will cascade delete them
+			// But we've already recorded the mapping, so updateReferences will fix everything
+			// after all collisions are processed
+			
+			// Delete the existing issue with old ID (this will cascade delete old dependencies)
+			if err := s.DeleteIssue(ctx, oldID); err != nil {
+				return nil, fmt.Errorf("failed to delete old existing issue %s: %w", oldID, err)
+			}
+			
+			// NOW create incoming issue with original ID (replaces the deleted one)
+			if err := s.CreateIssue(ctx, collision.IncomingIssue, "import-replace"); err != nil {
+				return nil, fmt.Errorf("failed to create incoming issue %s: %w", oldID, err)
+			}
 		}
 	}
 
-	// Now update all references in text fields and dependencies
+	// Step 3: Recreate dependencies with updated IDs
+	// For each dependency that involved a remapped issue, recreate it with new IDs
+	for issueID, deps := range allDepsBeforeRemap {
+		for _, dep := range deps {
+			// Determine new IDs (use mapping if available, otherwise keep original)
+			newIssueID := issueID
+			if mappedID, ok := idMapping[issueID]; ok {
+				newIssueID = mappedID
+			}
+			
+			newDependsOnID := dep.DependsOnID
+			if mappedID, ok := idMapping[dep.DependsOnID]; ok {
+				newDependsOnID = mappedID
+			}
+			
+			// Only recreate if at least one ID was remapped
+			if newIssueID != issueID || newDependsOnID != dep.DependsOnID {
+				// Check if both issues still exist (the source might have been replaced)
+				sourceExists, err := s.GetIssue(ctx, newIssueID)
+				if err != nil || sourceExists == nil {
+					continue // Skip if source was deleted/replaced
+				}
+				
+				targetExists, err := s.GetIssue(ctx, newDependsOnID)
+				if err != nil || targetExists == nil {
+					continue // Skip if target doesn't exist
+				}
+				
+				// Create the dependency with new IDs
+				newDep := &types.Dependency{
+					IssueID:     newIssueID,
+					DependsOnID: newDependsOnID,
+					Type:        dep.Type,
+				}
+				if err := s.addDependencyUnchecked(ctx, newDep, "import-remap"); err != nil {
+					// Ignore duplicate dependency errors
+					continue
+				}
+			}
+		}
+	}
+
+	// Step 4: Update all text field references
 	if err := updateReferences(ctx, s, idMapping); err != nil {
 		return nil, fmt.Errorf("failed to update references: %w", err)
 	}
@@ -343,7 +478,7 @@ func RemapCollisions(ctx context.Context, s *SQLiteStorage, collisions []*Collis
 func updateReferences(ctx context.Context, s *SQLiteStorage, idMapping map[string]string) error {
 	// Pre-compile all regexes once for the entire operation
 	// This avoids recompiling the same patterns for each text field
-	cache, err := buildReplacementCache(idMapping)
+	cache, err := BuildReplacementCache(idMapping)
 	if err != nil {
 		return fmt.Errorf("failed to build replacement cache: %w", err)
 	}
@@ -359,25 +494,25 @@ func updateReferences(ctx context.Context, s *SQLiteStorage, idMapping map[strin
 		updates := make(map[string]interface{})
 
 		// Update description using cached regexes
-		newDesc := replaceIDReferencesWithCache(issue.Description, cache)
+		newDesc := ReplaceIDReferencesWithCache(issue.Description, cache)
 		if newDesc != issue.Description {
 			updates["description"] = newDesc
 		}
 
 		// Update design using cached regexes
-		newDesign := replaceIDReferencesWithCache(issue.Design, cache)
+		newDesign := ReplaceIDReferencesWithCache(issue.Design, cache)
 		if newDesign != issue.Design {
 			updates["design"] = newDesign
 		}
 
 		// Update notes using cached regexes
-		newNotes := replaceIDReferencesWithCache(issue.Notes, cache)
+		newNotes := ReplaceIDReferencesWithCache(issue.Notes, cache)
 		if newNotes != issue.Notes {
 			updates["notes"] = newNotes
 		}
 
 		// Update acceptance criteria using cached regexes
-		newAC := replaceIDReferencesWithCache(issue.AcceptanceCriteria, cache)
+		newAC := ReplaceIDReferencesWithCache(issue.AcceptanceCriteria, cache)
 		if newAC != issue.AcceptanceCriteria {
 			updates["acceptance_criteria"] = newAC
 		}
@@ -407,9 +542,9 @@ type idReplacementCache struct {
 	regex       *regexp.Regexp
 }
 
-// buildReplacementCache pre-compiles all regex patterns for an ID mapping
+// BuildReplacementCache pre-compiles all regex patterns for an ID mapping
 // This cache should be created once per ID mapping and reused for all text replacements
-func buildReplacementCache(idMapping map[string]string) ([]*idReplacementCache, error) {
+func BuildReplacementCache(idMapping map[string]string) ([]*idReplacementCache, error) {
 	cache := make([]*idReplacementCache, 0, len(idMapping))
 	i := 0
 	for oldID, newID := range idMapping {
@@ -431,9 +566,9 @@ func buildReplacementCache(idMapping map[string]string) ([]*idReplacementCache, 
 	return cache, nil
 }
 
-// replaceIDReferencesWithCache replaces all occurrences of old IDs with new IDs using a pre-compiled cache
+// ReplaceIDReferencesWithCache replaces all occurrences of old IDs with new IDs using a pre-compiled cache
 // Uses a two-phase approach to avoid replacement conflicts: first replace with placeholders, then replace with new IDs
-func replaceIDReferencesWithCache(text string, cache []*idReplacementCache) string {
+func ReplaceIDReferencesWithCache(text string, cache []*idReplacementCache) string {
 	if len(cache) == 0 || text == "" {
 		return text
 	}
@@ -458,16 +593,16 @@ func replaceIDReferencesWithCache(text string, cache []*idReplacementCache) stri
 // placeholders, then replace placeholders with new IDs
 //
 // Note: This function compiles regexes on every call. For better performance when
-// processing multiple text fields with the same ID mapping, use buildReplacementCache()
-// and replaceIDReferencesWithCache() instead.
+// processing multiple text fields with the same ID mapping, use BuildReplacementCache()
+// and ReplaceIDReferencesWithCache() instead.
 func replaceIDReferences(text string, idMapping map[string]string) string {
 	// Build cache (compiles regexes)
-	cache, err := buildReplacementCache(idMapping)
+	cache, err := BuildReplacementCache(idMapping)
 	if err != nil {
 		// Fallback to no replacement if regex compilation fails
 		return text
 	}
-	return replaceIDReferencesWithCache(text, cache)
+	return ReplaceIDReferencesWithCache(text, cache)
 }
 
 // updateDependencyReferences updates dependency records to use new IDs
