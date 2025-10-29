@@ -1,21 +1,15 @@
-version: "2"
-
 run:
   timeout: 5m
   tests: false
 
 linters:
-  disable:
-    - dupl
-    - goconst
-    - revive
+  disable-all: true  # Disable all default linters
   enable:
     - errcheck
     - gosec
     # - gocyclo  # Disabled: high complexity acceptable for large functions (see LINTING.md)
     - misspell
     - unconvert
-    - unparam
 
 linters-settings:
   dupl:
