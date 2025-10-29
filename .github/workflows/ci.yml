@@ -72,9 +72,10 @@ jobs:
           go-version: '1.24'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v1.64.8
+          args: --verbose
   # test-nix:
   #   name: Test Nix Flake
   #   runs-on: ubuntu-latest
