@@ -289,7 +289,7 @@ func tailLines(filePath string, n int) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Read all lines
 	var lines []string
@@ -320,10 +320,10 @@ func tailFollow(filePath string) {
 		fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
 		os.Exit(1)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Seek to end
-	file.Seek(0, io.SeekEnd)
+	_, _ = file.Seek(0, io.SeekEnd)
 
 	reader := bufio.NewReader(file)
 	for {
