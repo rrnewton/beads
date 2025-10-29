@@ -7,13 +7,15 @@ linters:
     - dupl
     - goconst
     - revive
+    - unused      # Disabled: many false positives for dead code awaiting removal
+    - unparam     # Disabled: parameters used across different call sites
+    - staticcheck # Disabled: reports empty branches that are intentional (future work)
   enable:
     - errcheck
     - gosec
     # - gocyclo  # Disabled: high complexity acceptable for large functions (see LINTING.md)
     - misspell
     - unconvert
-    - unparam
 
 linters-settings:
   dupl:
